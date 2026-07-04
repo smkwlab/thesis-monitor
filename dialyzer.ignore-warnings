@@ -1,0 +1,1 @@
+lib/thesis_monitor/commands/pr_stats.ex:28:11:pattern_match_cov The pattern variable _ can never match the type, because it is covered by previous clauses.

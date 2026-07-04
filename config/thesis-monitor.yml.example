@@ -1,0 +1,17 @@
+# Thesis Monitor Configuration Example
+# Copy this file to ~/.thesis-monitor.yml and customize
+
+# GitHub Settings
+github_token: "your_github_token_here"
+github_org: "your-org"
+
+# Data Directories (absolute paths)
+data_dir: "/path/to/your-student-registry/data"
+
+# Cache Settings
+cache_dir: "~/.cache/thesis-monitor"
+cache_ttl: 1800  # 30 minutes
+
+# API Settings
+max_concurrency: 10
+timeout: 10000  # 10 seconds
