@@ -42,6 +42,24 @@ sudo cp thesis_monitor /usr/local/bin/
 
 ## 使用方法
 
+### 初期セットアップ
+
+```bash
+# 本番セットアップ: ~/.thesis-monitor.yml の生成、registry データリポジトリの
+# clone（既存 checkout があればパス設定のみ）、doctor 検証までを一括で行う
+thesis-monitor init
+
+# テスト用サンドボックス: thesis-student-registry-test を使い、
+# ./thesis-monitor-test.yml と分離キャッシュを生成する
+thesis-monitor init --test
+
+# 既存 checkout を使う場合
+thesis-monitor init --registry-dir /path/to/thesis-student-registry/data
+```
+
+レジストリデータリポジトリ自体の新規作成（bootstrap）は本ツールのスコープ外です。
+[registry-manager](https://github.com/smkwlab/registry-manager) の init を使用してください。
+
 ### 基本コマンド
 
 ```bash

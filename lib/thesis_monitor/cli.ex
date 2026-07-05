@@ -35,7 +35,14 @@ defmodule ThesisMonitor.CLI do
           fullname: :boolean,
           type: :string,
           t: :boolean,
-          r: :boolean
+          r: :boolean,
+          # init 用
+          test: :boolean,
+          org: :string,
+          registry_repo: :string,
+          registry_dir: :string,
+          clone_to: :string,
+          force: :boolean
         ],
         aliases: [
           h: :help,
@@ -67,6 +74,16 @@ defmodule ThesisMonitor.CLI do
     end
   end
 
+  @command_modules %{
+    "init" => Commands.Init,
+    "status" => Commands.Status,
+    "activity" => Commands.Activity,
+    "pr-stats" => Commands.PullRequestStats,
+    "check" => Commands.Check,
+    "bulk" => Commands.Bulk,
+    "search" => Commands.Search
+  }
+
   defp process({opts, [command | args]}) do
     Config.load(opts[:config])
 
@@ -74,26 +91,11 @@ defmodule ThesisMonitor.CLI do
     {:ok, _pid} = Output.start_link(verbose: opts[:verbose] || false)
     {:ok, _pid} = ThesisMonitor.TokenManager.start_link()
 
-    case command do
-      "status" ->
-        Commands.Status.run(args, opts)
+    case Map.fetch(@command_modules, command) do
+      {:ok, module} ->
+        module.run(args, opts)
 
-      "activity" ->
-        Commands.Activity.run(args, opts)
-
-      "pr-stats" ->
-        Commands.PullRequestStats.run(args, opts)
-
-      "check" ->
-        Commands.Check.run(args, opts)
-
-      "bulk" ->
-        Commands.Bulk.run(args, opts)
-
-      "search" ->
-        Commands.Search.run(args, opts)
-
-      _ ->
+      :error ->
         Output.error("Unknown command: #{command}")
         show_help()
         System.halt(1)
@@ -107,6 +109,7 @@ defmodule ThesisMonitor.CLI do
     Usage: thesis-monitor [command] [options]
 
     Commands:
+      init        セットアップ（設定ファイル生成・registry の clone・doctor 検証）
       status      全学生リポジトリの状態を表示
       activity    最近のコミット活動を表示（過去7日間）
       pr-stats    PR/Issue統計を表示
@@ -129,7 +132,17 @@ defmodule ThesisMonitor.CLI do
       -t                  最終更新時刻順でソート
       -r                  ソート順を逆順にする
 
+    Init options:
+      --test              テスト用サンドボックス設定を生成（thesis-student-registry-test を使用）
+      --org               GitHub organization（デフォルト: smkwlab）
+      --registry-repo     レジストリデータリポジトリ（owner/repo 形式）
+      --registry-dir      既存 checkout の data/ ディレクトリ（指定時は clone しない）
+      --clone-to          clone 先ディレクトリ（デフォルト: ./<repo名>）
+      --force             既存の設定ファイルを上書き
+
     Examples:
+      thesis-monitor init                 # 本番セットアップ（~/.thesis-monitor.yml 生成）
+      thesis-monitor init --test          # テスト用サンドボックス（./thesis-monitor-test.yml 生成）
       thesis-monitor status
       thesis-monitor status --show-protection
       thesis-monitor status --show-status
