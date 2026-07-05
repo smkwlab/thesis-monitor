@@ -34,7 +34,7 @@ defmodule ThesisMonitor.DataSource.GitHubAPITest do
       # Test that module has basic configuration without making requests
       functions = GitHubAPI.__info__(:functions)
       assert is_list(functions)
-      assert length(functions) > 0
+      assert functions != []
     end
   end
 

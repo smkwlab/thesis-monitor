@@ -26,22 +26,23 @@ defmodule ThesisMonitor.DataSource do
       {:ok, students}
     else
       _error ->
-        # フォールバック: レジストリのみからデータを取得
-        case Local.get_registry_students() do
-          {:ok, students} ->
-            # CSVから名前を取得できない場合でも、学生データは返す
-            case Local.get_student_names() do
-              {:ok, names_map} ->
-                students_with_names = Enum.map(students, &add_student_name(&1, names_map))
-                {:ok, students_with_names}
+        registry_only_students()
+    end
+  end
 
-              _error ->
-                {:ok, students}
-            end
+  # フォールバック: レジストリのみからデータを取得
+  defp registry_only_students do
+    case Local.get_registry_students() do
+      {:ok, students} -> {:ok, add_names_if_available(students)}
+      _error -> {:ok, []}
+    end
+  end
 
-          _error ->
-            {:ok, []}
-        end
+  # CSVから名前を取得できない場合でも、学生データは返す
+  defp add_names_if_available(students) do
+    case Local.get_student_names() do
+      {:ok, names_map} -> Enum.map(students, &add_student_name(&1, names_map))
+      _error -> students
     end
   end
 

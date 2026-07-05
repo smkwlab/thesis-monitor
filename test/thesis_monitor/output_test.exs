@@ -5,9 +5,19 @@ defmodule ThesisMonitor.OutputTest do
   alias ThesisMonitor.Output
 
   setup do
-    # Ensure clean state for each test
-    if Process.whereis(Output) do
-      Agent.stop(Output)
+    # Ensure clean state for each test.
+    # 前のテストが起動した Agent は test process の終了と同時に死ぬため、
+    # 名前解決後・stop 前に消えるレースがある。pid で止めて :exit は握りつぶす
+    case Process.whereis(Output) do
+      nil ->
+        :ok
+
+      pid ->
+        try do
+          Agent.stop(pid)
+        catch
+          :exit, _ -> :ok
+        end
     end
 
     :ok

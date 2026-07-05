@@ -2,6 +2,7 @@ defmodule ThesisMonitor.DataSourceTest do
   use ExUnit.Case, async: true
 
   alias ThesisMonitor.{DataSource, Student}
+  alias ThesisMonitor.DataSource.Local
 
   describe "get_all_students/0" do
     test "merges local and registry students without duplicates" do
@@ -53,12 +54,9 @@ defmodule ThesisMonitor.DataSourceTest do
 
       # Local.get_students, get_registry_students, get_student_names を config 引数付きで実行
       try do
-        {:ok, local_students} = ThesisMonitor.DataSource.Local.get_students(mock_config)
-
-        {:ok, registry_students} =
-          ThesisMonitor.DataSource.Local.get_registry_students(mock_config)
-
-        {:ok, names_map} = ThesisMonitor.DataSource.Local.get_student_names(mock_config)
+        {:ok, local_students} = Local.get_students(mock_config)
+        {:ok, registry_students} = Local.get_registry_students(mock_config)
+        {:ok, names_map} = Local.get_student_names(mock_config)
 
         # 結果を検証
         assert length(local_students) == 1
@@ -285,16 +283,8 @@ defmodule ThesisMonitor.DataSourceTest do
       student = %Student{id: "k21rs001", name: nil}
       names_map = %{"k21rs001" => "田中太郎"}
 
-      # add_student_name のロジックをテスト
-      updated_student =
-        case student.name do
-          nil ->
-            name = Map.get(names_map, student.id)
-            %{student | name: name}
-
-          _ ->
-            student
-        end
+      # add_student_name のロジックをテスト（name: nil の場合は names_map から補完）
+      updated_student = %{student | name: Map.get(names_map, student.id)}
 
       assert updated_student.name == "田中太郎"
     end

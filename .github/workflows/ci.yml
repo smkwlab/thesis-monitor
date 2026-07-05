@@ -1,0 +1,26 @@
+# Elixir CI Workflow
+#
+# Uses the shared reusable workflow from smkwlab/.github
+
+name: Elixir CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+# Cancel in-progress runs for the same PR/branch
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  ci:
+    uses: smkwlab/.github/.github/workflows/elixir-ci.yml@v1
+    secrets: inherit
