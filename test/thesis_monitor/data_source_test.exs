@@ -2,6 +2,7 @@ defmodule ThesisMonitor.DataSourceTest do
   use ExUnit.Case, async: true
 
   alias ThesisMonitor.{DataSource, Student}
+  alias ThesisMonitor.DataSource.Local
 
   describe "get_all_students/0" do
     test "merges local and registry students without duplicates" do
@@ -53,12 +54,9 @@ defmodule ThesisMonitor.DataSourceTest do
 
       # Local.get_students, get_registry_students, get_student_names を config 引数付きで実行
       try do
-        {:ok, local_students} = ThesisMonitor.DataSource.Local.get_students(mock_config)
-
-        {:ok, registry_students} =
-          ThesisMonitor.DataSource.Local.get_registry_students(mock_config)
-
-        {:ok, names_map} = ThesisMonitor.DataSource.Local.get_student_names(mock_config)
+        {:ok, local_students} = Local.get_students(mock_config)
+        {:ok, registry_students} = Local.get_registry_students(mock_config)
+        {:ok, names_map} = Local.get_student_names(mock_config)
 
         # 結果を検証
         assert length(local_students) == 1
