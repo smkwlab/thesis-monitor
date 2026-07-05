@@ -72,6 +72,10 @@ defmodule ThesisMonitor.DataSource.GitHubAPI do
           {:ok, student.default_branch || "main"}
         end
 
+      {:error, 404} ->
+        # リポジトリが存在しない場合はブランチ名を捏造しない
+        {:ok, nil}
+
       {:error, _reason} ->
         {:ok, student.default_branch || "main"}
     end

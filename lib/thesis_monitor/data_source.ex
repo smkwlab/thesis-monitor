@@ -126,7 +126,11 @@ defmodule ThesisMonitor.DataSource do
 
   @doc """
   最新ブランチを取得（論文・ISEレポート用）
+
+  リポジトリが存在しない場合（exists: false）はブランチを取得せず nil を返す
   """
+  def get_latest_branch(%Student{exists: false}), do: {:ok, nil}
+
   def get_latest_branch(%Student{} = student) do
     if needs_latest_branch?(student) do
       GitHubAPI.get_latest_branch(student)

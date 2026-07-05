@@ -220,6 +220,25 @@ defmodule ThesisMonitor.DataSourceTest do
   end
 
   describe "get_latest_branch/1" do
+    test "returns nil for missing repository (exists: false)" do
+      # 存在しないリポジトリではブランチ取得をスキップし、
+      # default_branch や "main" を捏造しない (issue #1)
+      student = %Student{
+        repo_name: "k99rs999-sotsuron",
+        repo_type: "sotsuron",
+        exists: false,
+        default_branch: "main"
+      }
+
+      assert {:ok, nil} = DataSource.get_latest_branch(student)
+    end
+
+    test "returns nil for missing repository regardless of type" do
+      student = %Student{repo_name: "k99rs998-wr", type: "wr", exists: false}
+
+      assert {:ok, nil} = DataSource.get_latest_branch(student)
+    end
+
     test "returns default branch for non-thesis types" do
       student = %Student{type: "wr", default_branch: "main"}
       {:ok, branch} = DataSource.get_latest_branch(student)
