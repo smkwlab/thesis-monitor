@@ -283,16 +283,8 @@ defmodule ThesisMonitor.DataSourceTest do
       student = %Student{id: "k21rs001", name: nil}
       names_map = %{"k21rs001" => "田中太郎"}
 
-      # add_student_name のロジックをテスト
-      updated_student =
-        case student.name do
-          nil ->
-            name = Map.get(names_map, student.id)
-            %{student | name: name}
-
-          _ ->
-            student
-        end
+      # add_student_name のロジックをテスト（name: nil の場合は names_map から補完）
+      updated_student = %{student | name: Map.get(names_map, student.id)}
 
       assert updated_student.name == "田中太郎"
     end

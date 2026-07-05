@@ -9,6 +9,8 @@ defmodule ThesisMonitor.MixProject do
       start_permanent: Mix.env() == :prod,
       escript: [main_module: ThesisMonitor.CLI, name: "thesis-monitor"],
       test_coverage: [
+        # 現状の実測 59% を下回らないための床。テスト拡充に合わせて引き上げる
+        summary: [threshold: 55],
         ignore_modules: [
           # CLI層 - 外部コマンドライン依存
           ThesisMonitor.CLI,

@@ -163,20 +163,19 @@ defmodule ThesisMonitor.DataSource.GitHubAPI do
   PR/Issue統計を取得
   """
   def get_pr_issue_stats(%Student{repo_name: repo_name}) do
-    with {:ok, open_prs} <- get_pull_requests(repo_name, "open"),
-         {:ok, draft_prs} <- get_pull_requests(repo_name, "open", draft: true),
-         {:ok, open_issues} <- get_issues(repo_name, "open") do
-      stats = %{
-        open_prs: length(open_prs),
-        draft_prs: length(draft_prs),
-        open_issues: length(open_issues)
-      }
+    # get_pull_requests/3 と get_issues/2 は常に {:ok, list} を返す
+    # （API エラー時は {:ok, []} に畳む）ため else 節は不要
+    {:ok, open_prs} = get_pull_requests(repo_name, "open")
+    {:ok, draft_prs} = get_pull_requests(repo_name, "open", draft: true)
+    {:ok, open_issues} = get_issues(repo_name, "open")
 
-      {:ok, stats}
-    else
-      _error ->
-        {:error, :api_failure}
-    end
+    stats = %{
+      open_prs: length(open_prs),
+      draft_prs: length(draft_prs),
+      open_issues: length(open_issues)
+    }
+
+    {:ok, stats}
   end
 
   defp get_pull_requests(repo_name, state, opts \\ []) do
