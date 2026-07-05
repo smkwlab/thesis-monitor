@@ -99,6 +99,14 @@ defmodule ThesisMonitor.Config do
         |> Map.put(:registry_dir, legacy)
         |> Map.delete(:data_dir)
 
+      %{registry_dir: existing, data_dir: _legacy} when is_binary(existing) ->
+        IO.puts(
+          :stderr,
+          "warning: config key \"data_dir\" is ignored because \"registry_dir\" is set (#{path})"
+        )
+
+        Map.delete(config, :data_dir)
+
       _ ->
         Map.delete(config, :data_dir)
     end

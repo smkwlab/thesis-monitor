@@ -85,6 +85,22 @@ defmodule ThesisMonitor.ConfigExtendedTest do
       assert Config.get(:registry_dir) == "/tmp/test_new_wins"
       refute Map.has_key?(Config.get_all(), :data_dir)
     end
+
+    test "warns that data_dir is ignored when registry_dir is also set" do
+      path =
+        write_tmp_config("""
+        registry_dir: /tmp/test_new_wins
+        data_dir: /tmp/test_old_loses
+        """)
+
+      stderr =
+        ExUnit.CaptureIO.capture_io(:stderr, fn ->
+          {:ok, _pid} = Config.load(path)
+        end)
+
+      assert stderr =~ "data_dir"
+      assert stderr =~ "ignored"
+    end
   end
 
   describe "load configuration from different sources" do

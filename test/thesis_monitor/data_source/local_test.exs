@@ -6,59 +6,46 @@ defmodule ThesisMonitor.DataSource.LocalTest do
     @entry ~s({"k21rs001-sotsuron": {"student_id": "k21rs001", "repository_type": "sotsuron"}})
     @legacy_entry ~s({"k22rs002-sotsuron": {"student_id": "k22rs002", "repository_type": "sotsuron"}})
 
-    test "reads registry.json via the registry_dir config key" do
-      test_dir = System.tmp_dir() |> Path.join("test_registry_new_#{:rand.uniform(10000)}")
-      File.mkdir_p!(test_dir)
-      File.write!(Path.join(test_dir, "registry.json"), @entry)
+    defp make_registry_dir(prefix) do
+      test_dir =
+        System.tmp_dir()
+        |> Path.join("#{prefix}_#{System.unique_integer([:positive])}")
 
-      mock_config = fn
+      File.mkdir_p!(test_dir)
+      on_exit(fn -> File.rm_rf!(test_dir) end)
+      test_dir
+    end
+
+    defp registry_dir_config(test_dir) do
+      fn
         :registry_dir -> test_dir
         _ -> nil
       end
+    end
 
-      try do
-        {:ok, students} = Local.get_registry_students(mock_config)
-        assert [%{id: "k21rs001"}] = students
-      after
-        File.rm_rf!(test_dir)
-      end
+    test "reads registry.json via the registry_dir config key" do
+      test_dir = make_registry_dir("test_registry_new")
+      File.write!(Path.join(test_dir, "registry.json"), @entry)
+
+      {:ok, students} = Local.get_registry_students(registry_dir_config(test_dir))
+      assert [%{id: "k21rs001"}] = students
     end
 
     test "falls back to repositories.json when registry.json is absent" do
-      test_dir = System.tmp_dir() |> Path.join("test_registry_legacy_#{:rand.uniform(10000)}")
-      File.mkdir_p!(test_dir)
+      test_dir = make_registry_dir("test_registry_legacy")
       File.write!(Path.join(test_dir, "repositories.json"), @legacy_entry)
 
-      mock_config = fn
-        :registry_dir -> test_dir
-        _ -> nil
-      end
-
-      try do
-        {:ok, students} = Local.get_registry_students(mock_config)
-        assert [%{id: "k22rs002"}] = students
-      after
-        File.rm_rf!(test_dir)
-      end
+      {:ok, students} = Local.get_registry_students(registry_dir_config(test_dir))
+      assert [%{id: "k22rs002"}] = students
     end
 
     test "prefers registry.json when both files exist" do
-      test_dir = System.tmp_dir() |> Path.join("test_registry_both_#{:rand.uniform(10000)}")
-      File.mkdir_p!(test_dir)
+      test_dir = make_registry_dir("test_registry_both")
       File.write!(Path.join(test_dir, "registry.json"), @entry)
       File.write!(Path.join(test_dir, "repositories.json"), @legacy_entry)
 
-      mock_config = fn
-        :registry_dir -> test_dir
-        _ -> nil
-      end
-
-      try do
-        {:ok, students} = Local.get_registry_students(mock_config)
-        assert [%{id: "k21rs001"}] = students
-      after
-        File.rm_rf!(test_dir)
-      end
+      {:ok, students} = Local.get_registry_students(registry_dir_config(test_dir))
+      assert [%{id: "k21rs001"}] = students
     end
   end
 
