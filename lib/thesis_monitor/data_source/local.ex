@@ -29,14 +29,15 @@ defmodule ThesisMonitor.DataSource.Local do
     Path.join(get_registry_dir(config_fn), "protection-status/completed-protection.txt")
   end
 
-  defp registry_path(config_fn) do
+  # registry.json を優先して読み、無ければ旧名 repositories.json を読む
+  # （exists? チェックではなく read の結果で分岐し、TOCTOU を避ける）
+  defp read_registry_file(config_fn) do
     dir = get_registry_dir(config_fn)
-    new_path = Path.join(dir, @registry_file)
 
-    if File.exists?(new_path) do
-      new_path
-    else
-      Path.join(dir, @legacy_registry_file)
+    case File.read(Path.join(dir, @registry_file)) do
+      {:ok, content} -> {:ok, content}
+      {:error, :enoent} -> File.read(Path.join(dir, @legacy_registry_file))
+      error -> error
     end
   end
 
@@ -76,7 +77,7 @@ defmodule ThesisMonitor.DataSource.Local do
   レジストリから学生情報を取得
   """
   def get_registry_students(config_fn \\ &Config.get/1) do
-    case File.read(registry_path(config_fn)) do
+    case read_registry_file(config_fn) do
       {:ok, content} ->
         case Jason.decode(content) do
           {:ok, data} ->

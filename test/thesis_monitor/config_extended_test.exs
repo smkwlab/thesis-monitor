@@ -28,47 +28,62 @@ defmodule ThesisMonitor.ConfigExtendedTest do
   end
 
   describe "registry_dir key (issue #7)" do
+    defp write_tmp_config(content) do
+      path =
+        Path.join(
+          System.tmp_dir(),
+          "thesis-monitor-config-test-#{System.unique_integer([:positive])}.yml"
+        )
+
+      File.write!(path, content)
+      on_exit(fn -> File.rm(path) end)
+      path
+    end
+
     test "loads registry_dir with tilde expansion" do
-      config_content = """
-      registry_dir: ~/test_registry_dir
-      """
+      path =
+        write_tmp_config("""
+        registry_dir: ~/test_registry_dir
+        """)
 
-      File.write!("./test-config-registry.yml", config_content)
-
-      {:ok, _pid} = Config.load("./test-config-registry.yml")
+      {:ok, _pid} = Config.load(path)
 
       assert Config.get(:registry_dir) == Path.expand("~/test_registry_dir")
-
-      File.rm!("./test-config-registry.yml")
     end
 
     test "accepts legacy data_dir key as fallback for registry_dir" do
-      config_content = """
-      data_dir: /tmp/test_legacy_data_dir
-      """
+      path =
+        write_tmp_config("""
+        data_dir: /tmp/test_legacy_data_dir
+        """)
 
-      File.write!("./test-config-legacy.yml", config_content)
-
-      {:ok, _pid} = Config.load("./test-config-legacy.yml")
+      {:ok, _pid} = Config.load(path)
 
       assert Config.get(:registry_dir) == "/tmp/test_legacy_data_dir"
+    end
 
-      File.rm!("./test-config-legacy.yml")
+    test "removes the legacy data_dir key from the config map after migration" do
+      path =
+        write_tmp_config("""
+        data_dir: /tmp/test_legacy_data_dir
+        """)
+
+      {:ok, _pid} = Config.load(path)
+
+      refute Map.has_key?(Config.get_all(), :data_dir)
     end
 
     test "registry_dir wins when both keys are present" do
-      config_content = """
-      registry_dir: /tmp/test_new_wins
-      data_dir: /tmp/test_old_loses
-      """
+      path =
+        write_tmp_config("""
+        registry_dir: /tmp/test_new_wins
+        data_dir: /tmp/test_old_loses
+        """)
 
-      File.write!("./test-config-both.yml", config_content)
-
-      {:ok, _pid} = Config.load("./test-config-both.yml")
+      {:ok, _pid} = Config.load(path)
 
       assert Config.get(:registry_dir) == "/tmp/test_new_wins"
-
-      File.rm!("./test-config-both.yml")
+      refute Map.has_key?(Config.get_all(), :data_dir)
     end
   end
 

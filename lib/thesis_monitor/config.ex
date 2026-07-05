@@ -86,6 +86,7 @@ defmodule ThesisMonitor.Config do
   end
 
   # 旧キー data_dir を registry_dir へ移行（1 世代の後方互換、issue #7）
+  # 移行後は data_dir を残さない（get_all や get(:data_dir) から古い値が見えないように）
   defp migrate_legacy_keys(config, path) do
     case config do
       %{registry_dir: nil, data_dir: legacy} when is_binary(legacy) ->
@@ -94,10 +95,12 @@ defmodule ThesisMonitor.Config do
           "warning: config key \"data_dir\" is deprecated, rename it to \"registry_dir\" (#{path})"
         )
 
-        Map.put(config, :registry_dir, legacy)
+        config
+        |> Map.put(:registry_dir, legacy)
+        |> Map.delete(:data_dir)
 
       _ ->
-        config
+        Map.delete(config, :data_dir)
     end
   end
 end
