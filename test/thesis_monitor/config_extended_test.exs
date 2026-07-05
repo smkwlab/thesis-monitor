@@ -86,6 +86,21 @@ defmodule ThesisMonitor.ConfigExtendedTest do
       refute Map.has_key?(Config.get_all(), :data_dir)
     end
 
+    test "warns with a deprecation message when only data_dir is set" do
+      path =
+        write_tmp_config("""
+        data_dir: /tmp/test_legacy_data_dir
+        """)
+
+      stderr =
+        ExUnit.CaptureIO.capture_io(:stderr, fn ->
+          {:ok, _pid} = Config.load(path)
+        end)
+
+      assert stderr =~ "deprecated"
+      assert stderr =~ "registry_dir"
+    end
+
     test "warns that data_dir is ignored when registry_dir is also set" do
       path =
         write_tmp_config("""
