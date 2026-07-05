@@ -149,7 +149,8 @@ defmodule ThesisMonitor.CLI do
       設定例: config/thesis-monitor.yml.example を参照
       
     Required Configuration:
-      data_dir: thesis-student-registry/data ディレクトリへの絶対パス
+      registry_dir: thesis-student-registry/data ディレクトリへの絶対パス
+      （旧キー data_dir も当面は警告付きで受け付ける）
     """)
   end
 

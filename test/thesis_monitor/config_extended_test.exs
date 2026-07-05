@@ -27,6 +27,97 @@ defmodule ThesisMonitor.ConfigExtendedTest do
     :ok
   end
 
+  describe "registry_dir key (issue #7)" do
+    defp write_tmp_config(content) do
+      path =
+        Path.join(
+          System.tmp_dir(),
+          "thesis-monitor-config-test-#{System.unique_integer([:positive])}.yml"
+        )
+
+      File.write!(path, content)
+      on_exit(fn -> File.rm(path) end)
+      path
+    end
+
+    test "loads registry_dir with tilde expansion" do
+      path =
+        write_tmp_config("""
+        registry_dir: ~/test_registry_dir
+        """)
+
+      {:ok, _pid} = Config.load(path)
+
+      assert Config.get(:registry_dir) == Path.expand("~/test_registry_dir")
+    end
+
+    test "accepts legacy data_dir key as fallback for registry_dir" do
+      path =
+        write_tmp_config("""
+        data_dir: /tmp/test_legacy_data_dir
+        """)
+
+      {:ok, _pid} = Config.load(path)
+
+      assert Config.get(:registry_dir) == "/tmp/test_legacy_data_dir"
+    end
+
+    test "removes the legacy data_dir key from the config map after migration" do
+      path =
+        write_tmp_config("""
+        data_dir: /tmp/test_legacy_data_dir
+        """)
+
+      {:ok, _pid} = Config.load(path)
+
+      refute Map.has_key?(Config.get_all(), :data_dir)
+    end
+
+    test "registry_dir wins when both keys are present" do
+      path =
+        write_tmp_config("""
+        registry_dir: /tmp/test_new_wins
+        data_dir: /tmp/test_old_loses
+        """)
+
+      {:ok, _pid} = Config.load(path)
+
+      assert Config.get(:registry_dir) == "/tmp/test_new_wins"
+      refute Map.has_key?(Config.get_all(), :data_dir)
+    end
+
+    test "warns with a deprecation message when only data_dir is set" do
+      path =
+        write_tmp_config("""
+        data_dir: /tmp/test_legacy_data_dir
+        """)
+
+      stderr =
+        ExUnit.CaptureIO.capture_io(:stderr, fn ->
+          {:ok, _pid} = Config.load(path)
+        end)
+
+      assert stderr =~ "deprecated"
+      assert stderr =~ "registry_dir"
+    end
+
+    test "warns that data_dir is ignored when registry_dir is also set" do
+      path =
+        write_tmp_config("""
+        registry_dir: /tmp/test_new_wins
+        data_dir: /tmp/test_old_loses
+        """)
+
+      stderr =
+        ExUnit.CaptureIO.capture_io(:stderr, fn ->
+          {:ok, _pid} = Config.load(path)
+        end)
+
+      assert stderr =~ "data_dir"
+      assert stderr =~ "ignored"
+    end
+  end
+
   describe "load configuration from different sources" do
     test "loads from explicit config path" do
       config_content = """
@@ -54,7 +145,7 @@ defmodule ThesisMonitor.ConfigExtendedTest do
 
       config_content = """
       github_token: test_token_local
-      data_dir: ./test_data
+      registry_dir: ./test_data
       """
 
       File.write!("./config/thesis-monitor.yml", config_content)
@@ -62,7 +153,7 @@ defmodule ThesisMonitor.ConfigExtendedTest do
       {:ok, _pid} = Config.load(nil)
 
       assert Config.get(:github_token) == "test_token_local"
-      assert String.ends_with?(Config.get(:data_dir), "/test_data")
+      assert String.ends_with?(Config.get(:registry_dir), "/test_data")
 
       File.rm!("./config/thesis-monitor.yml")
       # Don't remove config directory as it might not be empty
@@ -116,13 +207,13 @@ defmodule ThesisMonitor.ConfigExtendedTest do
       assert result == "smkwlab"
     end
 
-    test "expands tilde in data_dir path" do
+    test "expands tilde in registry_dir path" do
       # Set a path with tilde
       Agent.update(Config, fn config ->
-        Map.put(config, :data_dir, "~/test_data")
+        Map.put(config, :registry_dir, "~/test_data")
       end)
 
-      result = Config.get(:data_dir)
+      result = Config.get(:registry_dir)
       refute String.contains?(result, "~")
       assert String.ends_with?(result, "/test_data")
     end

@@ -88,8 +88,8 @@ thesis_monitor status --config ./my-config.yml
 # GitHub設定
 github_org: your-org
 
-# データディレクトリ（レジストリデータリポジトリのローカルチェックアウト内の data/）
-data_dir: /path/to/your-student-registry/data
+# レジストリディレクトリ（レジストリデータリポジトリのローカルチェックアウト内の data/）
+registry_dir: /path/to/your-student-registry/data
 cache_dir: ~/.cache/thesis-monitor
 
 # 学生名取得用CSVファイル（任意）
@@ -110,8 +110,10 @@ export GITHUB_TOKEN=ghp_xxxxxxxxxxxxx
 
 ### データソース
 
-`data_dir` には学生リポジトリレジストリ（**private リポジトリ**で管理される
-`data/repositories.json`）のローカルチェックアウトを指定します。
+`registry_dir` には学生リポジトリレジストリ（**private リポジトリ**で管理される
+`data/registry.json`。旧名 `repositories.json` も移行期間中は自動で読み込む）の
+ローカルチェックアウトを指定します。旧キー `data_dir` も当面は警告付きで
+受け付けますが、`registry_dir` への移行を推奨します。
 データ構造の正本仕様は
 [registry-manager のデータ構造仕様書](https://github.com/smkwlab/registry-manager/blob/main/docs/data-structure-specification.md)
 を参照してください。

@@ -8,8 +8,8 @@ defmodule ThesisMonitor.Config do
   @default_config %{
     github_token: System.get_env("GITHUB_TOKEN"),
     github_org: "smkwlab",
-    # Must be set in config file
-    data_dir: nil,
+    # Must be set in config file (registry データリポジトリの data/ ディレクトリ)
+    registry_dir: nil,
     cache_dir: "~/.cache/thesis-monitor",
     # 30分
     cache_ttl: 1800,
@@ -50,9 +50,9 @@ defmodule ThesisMonitor.Config do
   def get(key) when is_atom(key) do
     value = Agent.get(__MODULE__, &Map.get(&1, key))
 
-    # data_dirの場合、チルダを展開
+    # パス系キーはチルダを展開
     case {key, value} do
-      {:data_dir, path} when is_binary(path) -> Path.expand(path)
+      {:registry_dir, path} when is_binary(path) -> Path.expand(path)
       {:cache_dir, path} when is_binary(path) -> Path.expand(path)
       _ -> value
     end
@@ -78,9 +78,37 @@ defmodule ThesisMonitor.Config do
         yaml
         |> Enum.map(fn {k, v} -> {String.to_atom(k), v} end)
         |> Enum.into(@default_config)
+        |> migrate_legacy_keys(path)
 
       _ ->
         @default_config
+    end
+  end
+
+  # 旧キー data_dir を registry_dir へ移行（1 世代の後方互換、issue #7）
+  # 移行後は data_dir を残さない（get_all や get(:data_dir) から古い値が見えないように）
+  defp migrate_legacy_keys(config, path) do
+    case config do
+      %{registry_dir: nil, data_dir: legacy} when is_binary(legacy) ->
+        IO.puts(
+          :stderr,
+          "warning: config key \"data_dir\" is deprecated, rename it to \"registry_dir\" (#{path})"
+        )
+
+        config
+        |> Map.put(:registry_dir, legacy)
+        |> Map.delete(:data_dir)
+
+      %{registry_dir: existing, data_dir: _legacy} when is_binary(existing) ->
+        IO.puts(
+          :stderr,
+          "warning: config key \"data_dir\" is ignored because \"registry_dir\" is set (#{path})"
+        )
+
+        Map.delete(config, :data_dir)
+
+      _ ->
+        Map.delete(config, :data_dir)
     end
   end
 end

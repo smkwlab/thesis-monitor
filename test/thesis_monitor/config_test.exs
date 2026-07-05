@@ -38,8 +38,8 @@ defmodule ThesisMonitor.ConfigTest do
       :ok
     end
 
-    test "get returns value for data_dir" do
-      result = Config.get(:data_dir)
+    test "get returns value for registry_dir" do
+      result = Config.get(:registry_dir)
       # Should return a string path or nil
       assert is_nil(result) or is_binary(result)
     end

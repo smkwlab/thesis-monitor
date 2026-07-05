@@ -5,13 +5,17 @@ defmodule ThesisMonitor.DataSource.Local do
 
   alias ThesisMonitor.{Config, Student}
 
-  defp get_data_dir(config_fn) do
-    case config_fn.(:data_dir) do
+  @registry_file "registry.json"
+  # 旧ファイル名（repositories.json → registry.json 改名の移行期間中のみ、issue #7）
+  @legacy_registry_file "repositories.json"
+
+  defp get_registry_dir(config_fn) do
+    case config_fn.(:registry_dir) do
       nil ->
         raise RuntimeError, """
-        Data directory not configured. Please create ~/.thesis-monitor.yml with:
+        Registry directory not configured. Please create ~/.thesis-monitor.yml with:
 
-        data_dir: "/path/to/thesis-student-registry/data"
+        registry_dir: "/path/to/thesis-student-registry/data"
 
         See config/thesis-monitor.yml.example for full configuration options.
         """
@@ -22,11 +26,19 @@ defmodule ThesisMonitor.DataSource.Local do
   end
 
   defp protection_status_path(config_fn) do
-    Path.join(get_data_dir(config_fn), "protection-status/completed-protection.txt")
+    Path.join(get_registry_dir(config_fn), "protection-status/completed-protection.txt")
   end
 
-  defp registry_path(config_fn) do
-    Path.join(get_data_dir(config_fn), "repositories.json")
+  # registry.json を優先して読み、無ければ旧名 repositories.json を読む
+  # （exists? チェックではなく read の結果で分岐し、TOCTOU を避ける）
+  defp read_registry_file(config_fn) do
+    dir = get_registry_dir(config_fn)
+
+    case File.read(Path.join(dir, @registry_file)) do
+      {:ok, content} -> {:ok, content}
+      {:error, :enoent} -> File.read(Path.join(dir, @legacy_registry_file))
+      error -> error
+    end
   end
 
   defp get_student_csv_path(config_fn) do
@@ -65,7 +77,7 @@ defmodule ThesisMonitor.DataSource.Local do
   レジストリから学生情報を取得
   """
   def get_registry_students(config_fn \\ &Config.get/1) do
-    case File.read(registry_path(config_fn)) do
+    case read_registry_file(config_fn) do
       {:ok, content} ->
         case Jason.decode(content) do
           {:ok, data} ->
