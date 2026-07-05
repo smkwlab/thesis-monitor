@@ -27,6 +27,51 @@ defmodule ThesisMonitor.ConfigExtendedTest do
     :ok
   end
 
+  describe "registry_dir key (issue #7)" do
+    test "loads registry_dir with tilde expansion" do
+      config_content = """
+      registry_dir: ~/test_registry_dir
+      """
+
+      File.write!("./test-config-registry.yml", config_content)
+
+      {:ok, _pid} = Config.load("./test-config-registry.yml")
+
+      assert Config.get(:registry_dir) == Path.expand("~/test_registry_dir")
+
+      File.rm!("./test-config-registry.yml")
+    end
+
+    test "accepts legacy data_dir key as fallback for registry_dir" do
+      config_content = """
+      data_dir: /tmp/test_legacy_data_dir
+      """
+
+      File.write!("./test-config-legacy.yml", config_content)
+
+      {:ok, _pid} = Config.load("./test-config-legacy.yml")
+
+      assert Config.get(:registry_dir) == "/tmp/test_legacy_data_dir"
+
+      File.rm!("./test-config-legacy.yml")
+    end
+
+    test "registry_dir wins when both keys are present" do
+      config_content = """
+      registry_dir: /tmp/test_new_wins
+      data_dir: /tmp/test_old_loses
+      """
+
+      File.write!("./test-config-both.yml", config_content)
+
+      {:ok, _pid} = Config.load("./test-config-both.yml")
+
+      assert Config.get(:registry_dir) == "/tmp/test_new_wins"
+
+      File.rm!("./test-config-both.yml")
+    end
+  end
+
   describe "load configuration from different sources" do
     test "loads from explicit config path" do
       config_content = """
@@ -54,7 +99,7 @@ defmodule ThesisMonitor.ConfigExtendedTest do
 
       config_content = """
       github_token: test_token_local
-      data_dir: ./test_data
+      registry_dir: ./test_data
       """
 
       File.write!("./config/thesis-monitor.yml", config_content)
@@ -62,7 +107,7 @@ defmodule ThesisMonitor.ConfigExtendedTest do
       {:ok, _pid} = Config.load(nil)
 
       assert Config.get(:github_token) == "test_token_local"
-      assert String.ends_with?(Config.get(:data_dir), "/test_data")
+      assert String.ends_with?(Config.get(:registry_dir), "/test_data")
 
       File.rm!("./config/thesis-monitor.yml")
       # Don't remove config directory as it might not be empty
@@ -116,13 +161,13 @@ defmodule ThesisMonitor.ConfigExtendedTest do
       assert result == "smkwlab"
     end
 
-    test "expands tilde in data_dir path" do
+    test "expands tilde in registry_dir path" do
       # Set a path with tilde
       Agent.update(Config, fn config ->
-        Map.put(config, :data_dir, "~/test_data")
+        Map.put(config, :registry_dir, "~/test_data")
       end)
 
-      result = Config.get(:data_dir)
+      result = Config.get(:registry_dir)
       refute String.contains?(result, "~")
       assert String.ends_with?(result, "/test_data")
     end

@@ -2,6 +2,66 @@ defmodule ThesisMonitor.DataSource.LocalTest do
   use ExUnit.Case, async: true
   alias ThesisMonitor.DataSource.Local
 
+  describe "registry file resolution (issue #7)" do
+    @entry ~s({"k21rs001-sotsuron": {"student_id": "k21rs001", "repository_type": "sotsuron"}})
+    @legacy_entry ~s({"k22rs002-sotsuron": {"student_id": "k22rs002", "repository_type": "sotsuron"}})
+
+    test "reads registry.json via the registry_dir config key" do
+      test_dir = System.tmp_dir() |> Path.join("test_registry_new_#{:rand.uniform(10000)}")
+      File.mkdir_p!(test_dir)
+      File.write!(Path.join(test_dir, "registry.json"), @entry)
+
+      mock_config = fn
+        :registry_dir -> test_dir
+        _ -> nil
+      end
+
+      try do
+        {:ok, students} = Local.get_registry_students(mock_config)
+        assert [%{id: "k21rs001"}] = students
+      after
+        File.rm_rf!(test_dir)
+      end
+    end
+
+    test "falls back to repositories.json when registry.json is absent" do
+      test_dir = System.tmp_dir() |> Path.join("test_registry_legacy_#{:rand.uniform(10000)}")
+      File.mkdir_p!(test_dir)
+      File.write!(Path.join(test_dir, "repositories.json"), @legacy_entry)
+
+      mock_config = fn
+        :registry_dir -> test_dir
+        _ -> nil
+      end
+
+      try do
+        {:ok, students} = Local.get_registry_students(mock_config)
+        assert [%{id: "k22rs002"}] = students
+      after
+        File.rm_rf!(test_dir)
+      end
+    end
+
+    test "prefers registry.json when both files exist" do
+      test_dir = System.tmp_dir() |> Path.join("test_registry_both_#{:rand.uniform(10000)}")
+      File.mkdir_p!(test_dir)
+      File.write!(Path.join(test_dir, "registry.json"), @entry)
+      File.write!(Path.join(test_dir, "repositories.json"), @legacy_entry)
+
+      mock_config = fn
+        :registry_dir -> test_dir
+        _ -> nil
+      end
+
+      try do
+        {:ok, students} = Local.get_registry_students(mock_config)
+        assert [%{id: "k21rs001"}] = students
+      after
+        File.rm_rf!(test_dir)
+      end
+    end
+  end
+
   describe "get_students/1" do
     test "parses student entries from protection file" do
       test_dir = System.tmp_dir() |> Path.join("test_protection_#{:rand.uniform(10000)}")
@@ -19,7 +79,7 @@ defmodule ThesisMonitor.DataSource.LocalTest do
       """)
 
       mock_config = fn
-        :data_dir -> test_dir
+        :registry_dir -> test_dir
         _ -> nil
       end
 
@@ -41,7 +101,7 @@ defmodule ThesisMonitor.DataSource.LocalTest do
       test_dir = System.tmp_dir() |> Path.join("test_missing_#{:rand.uniform(10000)}")
 
       mock_config = fn
-        :data_dir -> test_dir
+        :registry_dir -> test_dir
         _ -> nil
       end
 
@@ -64,7 +124,7 @@ defmodule ThesisMonitor.DataSource.LocalTest do
       """)
 
       mock_config = fn
-        :data_dir -> test_dir
+        :registry_dir -> test_dir
         _ -> nil
       end
 
@@ -76,13 +136,13 @@ defmodule ThesisMonitor.DataSource.LocalTest do
       end
     end
 
-    test "raises when data_dir is nil" do
+    test "raises when registry_dir is nil" do
       mock_config = fn
-        :data_dir -> nil
+        :registry_dir -> nil
         _ -> nil
       end
 
-      assert_raise RuntimeError, ~r/Data directory not configured/, fn ->
+      assert_raise RuntimeError, ~r/Registry directory not configured/, fn ->
         Local.get_students(mock_config)
       end
     end
@@ -111,7 +171,7 @@ defmodule ThesisMonitor.DataSource.LocalTest do
       File.write!(registry_file, Jason.encode!(registry_data))
 
       mock_config = fn
-        :data_dir -> test_dir
+        :registry_dir -> test_dir
         _ -> nil
       end
 
@@ -132,7 +192,7 @@ defmodule ThesisMonitor.DataSource.LocalTest do
       test_dir = System.tmp_dir() |> Path.join("test_missing_registry_#{:rand.uniform(10000)}")
 
       mock_config = fn
-        :data_dir -> test_dir
+        :registry_dir -> test_dir
         _ -> nil
       end
 
@@ -148,7 +208,7 @@ defmodule ThesisMonitor.DataSource.LocalTest do
       File.write!(registry_file, "invalid json")
 
       mock_config = fn
-        :data_dir -> test_dir
+        :registry_dir -> test_dir
         _ -> nil
       end
 

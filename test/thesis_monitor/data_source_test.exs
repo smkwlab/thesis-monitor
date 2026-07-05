@@ -47,7 +47,7 @@ defmodule ThesisMonitor.DataSourceTest do
       """)
 
       mock_config = fn
-        :data_dir -> test_dir
+        :registry_dir -> test_dir
         :student_csv -> csv_file
         _ -> nil
       end
