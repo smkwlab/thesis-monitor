@@ -131,6 +131,30 @@ defmodule ThesisMonitor.Commands.InitTest do
       assert File.read!(config) =~ "registry_dir: #{Path.join(clone_to, "data")}"
     end
 
+    test "fails when the cloned repository has no data directory" do
+      clone_to = tmp_path("init_no_data")
+      config = tmp_path("init_config") <> ".yml"
+      on_exit(fn -> File.rm_rf!(clone_to) end)
+
+      gh = fn
+        ["repo", "clone", _repo, path] ->
+          # data/ を持たないリポジトリ（空 repo や構造違い）を clone した状況
+          File.mkdir_p!(path)
+          {:ok, ""}
+
+        args ->
+          gh_ok_stub().(args)
+      end
+
+      opts = [config: config, clone_to: clone_to]
+
+      assert {:error, :registry_data_missing} =
+               Init.run([], opts, %{output: output_stub(), gh: gh})
+
+      refute File.exists?(config)
+      assert Enum.any?(collect_output(:error), &(&1 =~ "data/"))
+    end
+
     test "points to registry-manager init when the repo is unavailable" do
       clone_to = tmp_path("init_missing")
       config = tmp_path("init_config") <> ".yml"

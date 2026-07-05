@@ -85,7 +85,11 @@ defmodule ThesisMonitor.CLI do
   }
 
   defp process({opts, [command | args]}) do
-    Config.load(opts[:config])
+    # init は設定ファイルを生成する側なので読み込まない
+    # （既存 config の legacy キー警告などが init 中に混ざるのを避ける）
+    unless command == "init" do
+      Config.load(opts[:config])
+    end
 
     # OutputプロセスとTokenManagerを開始
     {:ok, _pid} = Output.start_link(verbose: opts[:verbose] || false)

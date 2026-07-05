@@ -43,7 +43,8 @@ defmodule ThesisMonitor.Commands.Init do
       org: org,
       registry_repo: opts[:registry_repo] || "#{org}/#{repo_name}",
       registry_dir: opts[:registry_dir],
-      clone_to: opts[:clone_to] || "./#{repo_name}",
+      # clone 先は実行時の cwd に依存しないよう解決時点で絶対パス化する
+      clone_to: Path.expand(opts[:clone_to] || "./#{repo_name}"),
       cache_dir:
         if(test_mode, do: "~/.cache/thesis-monitor-test", else: "~/.cache/thesis-monitor"),
       config_path: opts[:config] || default_config_path(test_mode),
@@ -122,7 +123,7 @@ defmodule ThesisMonitor.Commands.Init do
 
     case gh.(["repo", "clone", params.registry_repo, params.clone_to]) do
       {:ok, _} ->
-        {:ok, Path.expand(data_dir)}
+        verify_cloned_data_dir(data_dir, params, output)
 
       {:error, reason} ->
         call(
@@ -134,6 +135,23 @@ defmodule ThesisMonitor.Commands.Init do
         )
 
         {:error, :registry_repo_unavailable}
+    end
+  end
+
+  # clone は成功したが registry の構造（data/）を持たない場合を弾く
+  defp verify_cloned_data_dir(data_dir, params, output) do
+    if File.dir?(data_dir) do
+      {:ok, Path.expand(data_dir)}
+    else
+      call(
+        output,
+        :error,
+        "#{params.registry_repo} に data/ ディレクトリがありません。" <>
+          "レジストリデータリポジトリの初期化には registry-manager の init（bootstrap）を使用してください: " <>
+          "https://github.com/smkwlab/registry-manager"
+      )
+
+      {:error, :registry_data_missing}
     end
   end
 
