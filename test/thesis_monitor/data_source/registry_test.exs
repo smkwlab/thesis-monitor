@@ -41,11 +41,6 @@ defmodule ThesisMonitor.DataSource.RegistryTest do
       assert {:api, "testorg/thesis-student-registry"} = Registry.resolve_source(api_config())
     end
 
-    test "registry_dir only resolves to local source" do
-      config = api_config(%{registry_repo: nil, registry_dir: "/tmp/some/data"})
-      assert :local = Registry.resolve_source(config)
-    end
-
     test "neither key resolves to the org convention repo" do
       config = api_config(%{registry_repo: nil})
 
@@ -55,11 +50,6 @@ defmodule ThesisMonitor.DataSource.RegistryTest do
     test "empty registry_repo string falls back to the convention" do
       config = api_config(%{registry_repo: ""})
 
-      assert {:api, "testorg/thesis-student-registry"} = Registry.resolve_source(config)
-    end
-
-    test "registry_repo wins over registry_dir" do
-      config = api_config(%{registry_dir: "/tmp/some/data"})
       assert {:api, "testorg/thesis-student-registry"} = Registry.resolve_source(config)
     end
   end
@@ -76,18 +66,8 @@ defmodule ThesisMonitor.DataSource.RegistryTest do
                student
     end
 
-    test "falls back to data/repositories.json when registry.json is 404" do
-      fetch = fn
-        _repo, "data/registry.json" -> {:error, :not_found}
-        _repo, "data/repositories.json" -> {:ok, @registry_json}
-      end
-
-      assert {:ok, [%Student{id: "k21rs001"}]} =
-               Registry.get_registry_students(api_config(), fetch)
-    end
-
-    test "raises with actionable message when both registry files are missing" do
-      fetch = fn _repo, _path -> {:error, :not_found} end
+    test "raises with actionable message when registry.json is missing" do
+      fetch = fn _repo, "data/registry.json" -> {:error, :not_found} end
 
       assert_raise RuntimeError, ~r/registry/, fn ->
         Registry.get_registry_students(api_config(), fetch)
@@ -171,19 +151,6 @@ defmodule ThesisMonitor.DataSource.RegistryTest do
     end
   end
 
-  describe "get_registry_students/2 (local mode)" do
-    test "delegates to the local checkout reader" do
-      dir = make_tmp_dir()
-      File.write!(Path.join(dir, "registry.json"), @registry_json)
-      config = api_config(%{registry_repo: nil, registry_dir: dir})
-
-      fetch = fn _repo, _path -> flunk("API must not be called in local mode") end
-
-      assert {:ok, [%Student{id: "k21rs001"}]} =
-               Registry.get_registry_students(config, fetch)
-    end
-  end
-
   describe "get_students/2 (protection status, api mode)" do
     test "fetches and parses the protection status file" do
       fetch = fn _repo, "data/protection-status/completed-protection.txt" ->
@@ -206,22 +173,6 @@ defmodule ThesisMonitor.DataSource.RegistryTest do
       assert_raise RuntimeError, ~r/token/i, fn ->
         Registry.get_students(api_config(), fetch)
       end
-    end
-
-    test "delegates to the local checkout reader in local mode" do
-      dir = make_tmp_dir()
-      File.mkdir_p!(Path.join(dir, "protection-status"))
-
-      File.write!(
-        Path.join(dir, "protection-status/completed-protection.txt"),
-        "Student: k21rs001 - Protected\n"
-      )
-
-      config = api_config(%{registry_repo: nil, registry_dir: dir})
-      fetch = fn _repo, _path -> flunk("API must not be called in local mode") end
-
-      assert {:ok, [%Student{id: "k21rs001", status: :protected}]} =
-               Registry.get_students(config, fetch)
     end
   end
 end

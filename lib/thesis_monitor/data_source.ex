@@ -32,11 +32,11 @@ defmodule ThesisMonitor.DataSource do
   end
 
   # フォールバック: レジストリのみからデータを取得
+  # （Registry は {:ok, _} を返すか raise するかのどちらか。ここに来るのは
+  #   CSV 名簿の読み取りが {:error, _} を返した場合のみ）
   defp registry_only_students do
-    case Registry.get_registry_students() do
-      {:ok, students} -> {:ok, add_names_if_available(students)}
-      _error -> {:ok, []}
-    end
+    {:ok, students} = Registry.get_registry_students()
+    {:ok, add_names_if_available(students)}
   end
 
   # CSVから名前を取得できない場合でも、学生データは返す

@@ -144,33 +144,6 @@ defmodule ThesisMonitor.Commands.InitTest do
     end
   end
 
-  describe "run/3 legacy local mode (--registry-dir)" do
-    test "writes registry_dir instead of registry_repo" do
-      checkout = make_registry_checkout("init_local")
-      config = tmp_path("init_config") <> ".yml"
-      on_exit(fn -> File.rm(config) end)
-
-      opts = [config: config, registry_dir: Path.join(checkout, "data")]
-
-      assert {:ok, _} = Init.run([], opts, %{output: output_stub(), gh: gh_ok_stub()})
-
-      content = File.read!(config)
-      assert content =~ "registry_dir: #{Path.join(checkout, "data")}"
-      refute content =~ "registry_repo:"
-    end
-
-    test "fails when the given registry_dir does not exist" do
-      config = tmp_path("init_config") <> ".yml"
-
-      opts = [config: config, registry_dir: "/nonexistent/registry/data"]
-
-      assert {:error, :registry_dir_not_found} =
-               Init.run([], opts, %{output: output_stub(), gh: gh_ok_stub()})
-
-      refute File.exists?(config)
-    end
-  end
-
   describe "run/3 --test sandbox mode" do
     test "uses the test registry repo and a separate cache dir" do
       config = tmp_path("init_config") <> ".yml"
@@ -208,26 +181,6 @@ defmodule ThesisMonitor.Commands.InitTest do
       assert Enum.any?(collect_output(:success), &(&1 =~ "registry"))
     end
 
-    test "warns with a legacy note when only repositories.json exists" do
-      config = tmp_path("init_config") <> ".yml"
-      on_exit(fn -> File.rm(config) end)
-
-      gh = fn
-        ["api", "repos/" <> rest | _] ->
-          cond do
-            String.ends_with?(rest, "data/registry.json") -> {:error, "HTTP 404"}
-            String.ends_with?(rest, "data/repositories.json") -> {:ok, "{}"}
-            true -> {:ok, "{}"}
-          end
-
-        args ->
-          gh_ok_stub().(args)
-      end
-
-      assert {:ok, _} = Init.run([], [config: config], %{output: output_stub(), gh: gh})
-      assert Enum.any?(collect_output(:warn), &(&1 =~ "repositories.json"))
-    end
-
     test "points to registry-manager init when the registry is unreachable" do
       config = tmp_path("init_config") <> ".yml"
       on_exit(fn -> File.rm(config) end)
@@ -257,19 +210,6 @@ defmodule ThesisMonitor.Commands.InitTest do
 
       assert {:ok, _} = Init.run([], [config: config], %{output: output_stub(), gh: gh})
       assert Enum.any?(collect_output(:warn), &(&1 =~ "gh auth login"))
-    end
-
-    test "warns when the registry file is missing from registry_dir (local mode)" do
-      dir = tmp_path("init_empty_dir")
-      File.mkdir_p!(dir)
-      on_exit(fn -> File.rm_rf!(dir) end)
-      config = tmp_path("init_config") <> ".yml"
-      on_exit(fn -> File.rm(config) end)
-
-      opts = [config: config, registry_dir: dir]
-
-      assert {:ok, _} = Init.run([], opts, %{output: output_stub(), gh: gh_ok_stub()})
-      assert Enum.any?(collect_output(:warn), &(&1 =~ "registry.json"))
     end
   end
 end

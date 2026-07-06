@@ -1,229 +1,36 @@
 defmodule ThesisMonitor.DataSource.LocalTest do
   use ExUnit.Case, async: true
   alias ThesisMonitor.DataSource.Local
+  alias ThesisMonitor.Student
 
-  describe "registry file resolution (issue #7)" do
-    @entry ~s({"k21rs001-sotsuron": {"student_id": "k21rs001", "repository_type": "sotsuron"}})
-    @legacy_entry ~s({"k22rs002-sotsuron": {"student_id": "k22rs002", "repository_type": "sotsuron"}})
+  describe "parse_protection_content/1" do
+    test "parses student entries and the fallback line format" do
+      content = """
+      Student: k21rs001 - Protected
+      k22jk002 protected at 2026-01-01
+      not a student line
+      """
 
-    defp make_registry_dir(prefix) do
-      test_dir =
-        System.tmp_dir()
-        |> Path.join("#{prefix}_#{System.unique_integer([:positive])}")
+      students = Local.parse_protection_content(content)
 
-      File.mkdir_p!(test_dir)
-      on_exit(fn -> File.rm_rf!(test_dir) end)
-      test_dir
-    end
-
-    defp registry_dir_config(test_dir) do
-      fn
-        :registry_dir -> test_dir
-        _ -> nil
-      end
-    end
-
-    test "reads registry.json via the registry_dir config key" do
-      test_dir = make_registry_dir("test_registry_new")
-      File.write!(Path.join(test_dir, "registry.json"), @entry)
-
-      {:ok, students} = Local.get_registry_students(registry_dir_config(test_dir))
-      assert [%{id: "k21rs001"}] = students
-    end
-
-    test "falls back to repositories.json when registry.json is absent" do
-      test_dir = make_registry_dir("test_registry_legacy")
-      File.write!(Path.join(test_dir, "repositories.json"), @legacy_entry)
-
-      {:ok, students} = Local.get_registry_students(registry_dir_config(test_dir))
-      assert [%{id: "k22rs002"}] = students
-    end
-
-    test "prefers registry.json when both files exist" do
-      test_dir = make_registry_dir("test_registry_both")
-      File.write!(Path.join(test_dir, "registry.json"), @entry)
-      File.write!(Path.join(test_dir, "repositories.json"), @legacy_entry)
-
-      {:ok, students} = Local.get_registry_students(registry_dir_config(test_dir))
-      assert [%{id: "k21rs001"}] = students
+      assert [%Student{id: "k21rs001", status: :protected}, %Student{id: "k22jk002"}] = students
+      assert hd(students).repo_name == "k21rs001-sotsuron"
     end
   end
 
-  describe "get_students/1" do
-    test "parses student entries from protection file" do
-      test_dir = System.tmp_dir() |> Path.join("test_protection_#{:rand.uniform(10000)}")
-      File.mkdir_p!(test_dir)
-
-      protection_dir = Path.join(test_dir, "protection-status")
-      File.mkdir_p!(protection_dir)
-      protection_file = Path.join(protection_dir, "completed-protection.txt")
-
-      File.write!(protection_file, """
-      k21rs001-sotsuron # Completed: 2025-06-23 Student: k21rs001
-      k22jk059-sotsuron # Completed: 2025-06-24 Student: k22jk059
-      k23gjk01-thesis # Completed: 2025-06-24 Student: k23gjk01
-      Some invalid line
-      """)
-
-      mock_config = fn
-        :registry_dir -> test_dir
-        _ -> nil
-      end
-
-      try do
-        {:ok, students} = Local.get_students(mock_config)
-
-        assert length(students) == 3
-        student_ids = Enum.map(students, & &1.id)
-        assert "k21rs001" in student_ids
-        assert "k22jk059" in student_ids
-        assert "k23gjk01" in student_ids
-        assert Enum.all?(students, &(&1.status == :protected))
-      after
-        File.rm_rf!(test_dir)
-      end
-    end
-
-    test "handles missing protection file" do
-      test_dir = System.tmp_dir() |> Path.join("test_missing_#{:rand.uniform(10000)}")
-
-      mock_config = fn
-        :registry_dir -> test_dir
-        _ -> nil
-      end
-
-      {:ok, students} = Local.get_students(mock_config)
-      assert students == []
-    end
-
-    test "handles fallback regex" do
-      test_dir = System.tmp_dir() |> Path.join("test_fallback_#{:rand.uniform(10000)}")
-      File.mkdir_p!(test_dir)
-
-      protection_dir = Path.join(test_dir, "protection-status")
-      File.mkdir_p!(protection_dir)
-      protection_file = Path.join(protection_dir, "completed-protection.txt")
-
-      File.write!(protection_file, """
-      k21rs001
-      k22jk002
-      invalid_line
-      """)
-
-      mock_config = fn
-        :registry_dir -> test_dir
-        _ -> nil
-      end
-
-      try do
-        {:ok, students} = Local.get_students(mock_config)
-        assert length(students) == 2
-      after
-        File.rm_rf!(test_dir)
-      end
-    end
-
-    test "raises when registry_dir is nil" do
-      mock_config = fn
-        :registry_dir -> nil
-        _ -> nil
-      end
-
-      assert_raise RuntimeError, ~r/Registry directory not configured/, fn ->
-        Local.get_students(mock_config)
-      end
-    end
-  end
-
-  describe "get_registry_students/1" do
-    test "parses JSON registry file" do
-      test_dir = System.tmp_dir() |> Path.join("test_registry_#{:rand.uniform(10000)}")
-      File.mkdir_p!(test_dir)
-
-      registry_file = Path.join(test_dir, "repositories.json")
-
-      registry_data = %{
+  describe "parse_registry_data/1" do
+    test "builds students from decoded registry data, skipping invalid entries" do
+      data = %{
         "k21rs001-sotsuron" => %{
           "student_id" => "k21rs001",
           "repository_type" => "sotsuron",
           "status" => "active"
         },
-        "k22jk002-sotsuron" => %{
-          "student_id" => "k22jk002",
-          "repository_type" => "sotsuron",
-          "status" => "inactive"
-        }
+        "broken-entry" => %{"no_student_id" => true}
       }
 
-      File.write!(registry_file, Jason.encode!(registry_data))
-
-      mock_config = fn
-        :registry_dir -> test_dir
-        _ -> nil
-      end
-
-      try do
-        {:ok, students} = Local.get_registry_students(mock_config)
-
-        assert length(students) == 2
-        k21_student = Enum.find(students, &(&1.id == "k21rs001"))
-        assert k21_student.repo_name == "k21rs001-sotsuron"
-        assert k21_student.type == "sotsuron"
-        assert k21_student.status == :active
-      after
-        File.rm_rf!(test_dir)
-      end
-    end
-
-    test "handles missing registry file" do
-      test_dir = System.tmp_dir() |> Path.join("test_missing_registry_#{:rand.uniform(10000)}")
-
-      mock_config = fn
-        :registry_dir -> test_dir
-        _ -> nil
-      end
-
-      {:ok, students} = Local.get_registry_students(mock_config)
-      assert students == []
-    end
-
-    test "warns to stderr when the registry file contains invalid JSON (issue #14)" do
-      test_dir = System.tmp_dir() |> Path.join("test_invalid_warn_#{:rand.uniform(10000)}")
-      File.mkdir_p!(test_dir)
-      File.write!(Path.join(test_dir, "registry.json"), "{broken")
-      on_exit(fn -> File.rm_rf!(test_dir) end)
-
-      mock_config = fn
-        :registry_dir -> test_dir
-        _ -> nil
-      end
-
-      stderr =
-        ExUnit.CaptureIO.capture_io(:stderr, fn ->
-          assert {:ok, []} = Local.get_registry_students(mock_config)
-        end)
-
-      assert stderr =~ "invalid JSON"
-    end
-
-    test "handles invalid JSON" do
-      test_dir = System.tmp_dir() |> Path.join("test_invalid_json_#{:rand.uniform(10000)}")
-      File.mkdir_p!(test_dir)
-
-      registry_file = Path.join(test_dir, "repositories.json")
-      File.write!(registry_file, "invalid json")
-
-      mock_config = fn
-        :registry_dir -> test_dir
-        _ -> nil
-      end
-
-      try do
-        {:ok, students} = Local.get_registry_students(mock_config)
-        assert students == []
-      after
-        File.rm_rf!(test_dir)
-      end
+      assert [%Student{id: "k21rs001", repo_name: "k21rs001-sotsuron", repo_type: "sotsuron"}] =
+               Local.parse_registry_data(data)
     end
   end
 

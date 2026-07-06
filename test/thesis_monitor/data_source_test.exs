@@ -2,42 +2,14 @@ defmodule ThesisMonitor.DataSourceTest do
   use ExUnit.Case, async: true
 
   alias ThesisMonitor.{DataSource, Student}
-  alias ThesisMonitor.DataSource.Local
+  alias ThesisMonitor.DataSource.{Local, Registry}
 
   describe "get_all_students/0" do
-    test "merges local and registry students without duplicates" do
-      # テスト用の一時ディレクトリ作成
+    test "merges protection and registry students without duplicates (via Registry + CSV)" do
       test_dir = System.tmp_dir() |> Path.join("test_datasource_#{:rand.uniform(10000)}")
       File.mkdir_p!(test_dir)
+      on_exit(fn -> File.rm_rf!(test_dir) end)
 
-      # protection file 作成
-      protection_dir = Path.join(test_dir, "protection-status")
-      File.mkdir_p!(protection_dir)
-      protection_file = Path.join(protection_dir, "completed-protection.txt")
-
-      File.write!(protection_file, """
-      Student: k21rs001 has protection
-      """)
-
-      # registry file 作成
-      registry_file = Path.join(test_dir, "repositories.json")
-
-      registry_data = %{
-        "k22jk002-sotsuron" => %{
-          "student_id" => "k22jk002",
-          "repository_type" => "sotsuron",
-          "status" => "active"
-        },
-        "k21rs001-sotsuron" => %{
-          "student_id" => "k21rs001",
-          "repository_type" => "sotsuron",
-          "status" => "completed"
-        }
-      }
-
-      File.write!(registry_file, Jason.encode!(registry_data))
-
-      # CSV file 作成
       csv_file = Path.join(test_dir, "students.csv")
 
       File.write!(csv_file, """
@@ -46,34 +18,39 @@ defmodule ThesisMonitor.DataSourceTest do
       ,,22JK002,佐藤花子
       """)
 
+      registry_json =
+        Jason.encode!(%{
+          "k22jk002-sotsuron" => %{"student_id" => "k22jk002", "repository_type" => "sotsuron"},
+          "k21rs001-sotsuron" => %{"student_id" => "k21rs001", "repository_type" => "sotsuron"}
+        })
+
       mock_config = fn
-        :registry_dir -> test_dir
+        :registry_repo -> "testorg/thesis-student-registry"
+        :cache_dir -> test_dir
+        :cache_ttl -> 0
         :csv_path -> csv_file
         _ -> nil
       end
 
-      # Local.get_students, get_registry_students, get_student_names を config 引数付きで実行
-      try do
-        {:ok, local_students} = Local.get_students(mock_config)
-        {:ok, registry_students} = Local.get_registry_students(mock_config)
-        {:ok, names_map} = Local.get_student_names(mock_config)
-
-        # 結果を検証
-        assert length(local_students) == 1
-        assert length(registry_students) == 2
-        assert names_map["k21rs001"] == "田中太郎"
-        assert names_map["k22jk002"] == "佐藤花子"
-
-        # DataSource の動作は直接テストできないため、
-        # 代わりに個別の機能をテスト
-        all_students = local_students ++ registry_students
-        unique_students = Enum.uniq_by(all_students, & &1.repo_name)
-
-        # k21rs001 は重複削除される
-        assert length(unique_students) == 2
-      after
-        File.rm_rf!(test_dir)
+      fetch = fn
+        _repo, "data/registry.json" -> {:ok, registry_json}
+        _repo, "data/protection-status/completed-protection.txt" -> {:ok, "Student: k21rs001\n"}
       end
+
+      {:ok, protection_students} = Registry.get_students(mock_config, fetch)
+      {:ok, registry_students} = Registry.get_registry_students(mock_config, fetch)
+      {:ok, names_map} = Local.get_student_names(mock_config)
+
+      assert length(protection_students) == 1
+      assert length(registry_students) == 2
+      assert names_map["k21rs001"] == "田中太郎"
+      assert names_map["k22jk002"] == "佐藤花子"
+
+      # k21rs001 は protection と registry の両方に居るが repo_name で重複排除される
+      unique_students =
+        (protection_students ++ registry_students) |> Enum.uniq_by(& &1.repo_name)
+
+      assert length(unique_students) == 2
     end
 
     test "handles sort order correctly" do
