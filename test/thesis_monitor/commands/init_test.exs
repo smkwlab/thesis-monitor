@@ -50,7 +50,7 @@ defmodule ThesisMonitor.Commands.InitTest do
   end
 
   describe "run/3 config generation (API mode)" do
-    test "writes registry_repo, org, and cache_dir without cloning" do
+    test "writes org and cache_dir without cloning; convention registry_repo is a comment" do
       config = tmp_path("init_config") <> ".yml"
       on_exit(fn -> File.rm(config) end)
 
@@ -60,22 +60,28 @@ defmodule ThesisMonitor.Commands.InitTest do
 
       content = File.read!(config)
       assert content =~ "github_org: smkwlab"
-      assert content =~ "registry_repo: smkwlab/thesis-student-registry"
+
+      # 規約値と一致する registry_repo はコメントで書く（実効値は規約導出に任せ、
+      # 生成ファイルをドリフト源にしない。issue #16）
+      assert content =~ ~r/^# registry_repo: smkwlab\/thesis-student-registry/m
+      refute content =~ ~r/^registry_repo:/m
       assert content =~ "cache_dir: ~/.cache/thesis-monitor"
-      refute content =~ "registry_dir:"
+      refute content =~ ~r/^registry_dir:/m
     end
 
-    test "includes a commented csv_path hint for the local roster CSV" do
+    test "includes a commented csv_path hint mentioning the conventional path" do
       config = tmp_path("init_config") <> ".yml"
       on_exit(fn -> File.rm(config) end)
 
       assert {:ok, _} =
                Init.run([], [config: config], %{output: output_stub(), gh: gh_ok_stub()})
 
-      assert File.read!(config) =~ "# csv_path:"
+      content = File.read!(config)
+      assert content =~ "# csv_path:"
+      assert content =~ "students.csv"
     end
 
-    test "derives registry_repo from --org by convention" do
+    test "derives the commented registry_repo from --org by convention" do
       config = tmp_path("init_config") <> ".yml"
       on_exit(fn -> File.rm(config) end)
 
@@ -85,17 +91,18 @@ defmodule ThesisMonitor.Commands.InitTest do
 
       content = File.read!(config)
       assert content =~ "github_org: myorg"
-      assert content =~ "registry_repo: myorg/thesis-student-registry"
+      assert content =~ ~r/^# registry_repo: myorg\/thesis-student-registry/m
+      refute content =~ ~r/^registry_repo:/m
     end
 
-    test "honors an explicit --registry-repo override" do
+    test "honors an explicit --registry-repo override as an active line" do
       config = tmp_path("init_config") <> ".yml"
       on_exit(fn -> File.rm(config) end)
 
       opts = [config: config, registry_repo: "otherorg/custom-registry"]
 
       assert {:ok, _} = Init.run([], opts, %{output: output_stub(), gh: gh_ok_stub()})
-      assert File.read!(config) =~ "registry_repo: otherorg/custom-registry"
+      assert File.read!(config) =~ ~r/^registry_repo: otherorg\/custom-registry/m
     end
 
     test "refuses to overwrite an existing config without --force" do
@@ -159,7 +166,9 @@ defmodule ThesisMonitor.Commands.InitTest do
       assert {:ok, _} = Init.run([], opts, %{output: output_stub(), gh: gh_ok_stub()})
 
       content = File.read!(config)
-      assert content =~ "registry_repo: smkwlab/thesis-student-registry-test"
+      # テスト repo は規約値（<org>/thesis-student-registry）と異なるため
+      # 有効行として書かれなければならない
+      assert content =~ ~r/^registry_repo: smkwlab\/thesis-student-registry-test/m
       assert content =~ "cache_dir: ~/.cache/thesis-monitor-test"
     end
   end

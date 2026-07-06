@@ -168,7 +168,8 @@ defmodule ThesisMonitor.CLI do
     Configuration keys:
       registry_repo: レジストリデータリポジトリ（owner/repo）。未設定時は
                      <github_org>/thesis-student-registry を規約として使用
-      csv_path:      学生名簿 CSV のパス（任意。ローカル管理）
+      csv_path:      学生名簿 CSV のパス（任意。ローカル管理。未設定時は
+                     ~/.config/<github_org>/students.csv を規約として参照）
       （旧キー registry_dir / data_dir / student_csv も当面は警告付きで受け付ける）
     """)
   end

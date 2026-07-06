@@ -42,6 +42,8 @@ defmodule ThesisMonitor.Config do
           @default_config
       end
 
+    config = apply_csv_convention(config)
+
     case Process.whereis(__MODULE__) do
       nil ->
         Agent.start_link(fn -> config end, name: __MODULE__)
@@ -50,6 +52,34 @@ defmodule ThesisMonitor.Config do
         Agent.update(__MODULE__, fn _ -> config end)
         {:ok, pid}
     end
+  end
+
+  @doc """
+  csv_path 未設定（nil / 空文字列）のとき、規約パス
+  `~/.config/<github_org>/students.csv` が存在すればそれを使う（issue #16）。
+
+  明示設定が常に優先。registry-manager も同じ規約パスを参照する。
+  名簿はローカル管理方針のためリポジトリ・レジストリには置かない。
+  """
+  def apply_csv_convention(config, home \\ System.user_home!())
+
+  def apply_csv_convention(%{csv_path: csv} = config, home) when csv in [nil, ""] do
+    conventional = conventional_csv_path(config.github_org, home)
+
+    if File.exists?(conventional) do
+      Map.put(config, :csv_path, conventional)
+    else
+      Map.put(config, :csv_path, nil)
+    end
+  end
+
+  def apply_csv_convention(config, _home), do: config
+
+  @doc """
+  組織の名簿 CSV の規約パスを返す
+  """
+  def conventional_csv_path(github_org, home \\ System.user_home!()) do
+    Path.join([home, ".config", github_org, "students.csv"])
   end
 
   # Agent 未起動（escript の init 経路など Config.load 前の呼び出し）は

@@ -16,6 +16,8 @@ registry_repo: "your-org/thesis-student-registry"
 # registry_dir: "/path/to/your-student-registry/data"
 
 # Student roster CSV for name resolution (optional).
+# When unset, "~/.config/<github_org>/students.csv" is used by convention
+# if it exists (registry-manager reads the same conventional path).
 # The roster contains personal information: keep it as a LOCAL file only —
 # never commit it to any repository or to the registry.
 # csv_path: "/path/to/students.csv"
