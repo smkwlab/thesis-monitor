@@ -27,6 +27,8 @@ defmodule ThesisMonitor.Config do
   end
 
   def load(config_path \\ nil) do
+    user_config_path = default_config_path()
+
     config =
       cond do
         config_path && File.exists?(config_path) ->
@@ -35,8 +37,8 @@ defmodule ThesisMonitor.Config do
         File.exists?("./config/thesis-monitor.yml") ->
           load_from_file("./config/thesis-monitor.yml")
 
-        File.exists?(default_config_path()) ->
-          load_from_file(default_config_path())
+        File.exists?(user_config_path) ->
+          load_from_file(user_config_path)
 
         true ->
           @default_config

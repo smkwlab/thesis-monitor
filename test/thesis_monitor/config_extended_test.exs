@@ -170,11 +170,17 @@ defmodule ThesisMonitor.ConfigExtendedTest do
       assert stderr =~ "csv_path"
     end
 
-    test "csv_path defaults to nil (or the conventional file if the host has one)" do
-      {:ok, _pid} = Config.load(nil)
+    test "csv_path defaults to nil when no CSV is configured" do
+      # github_org を実在しない org にして、実行環境の規約ファイル
+      # （~/.config/smkwlab/students.csv 等）に依存しない決定論的なテストにする
+      path =
+        write_tmp_config("""
+        github_org: no-such-org-#{System.unique_integer([:positive])}
+        """)
 
-      # 実行環境に規約ファイル ~/.config/smkwlab/students.csv があればそれが入る
-      assert Config.get(:csv_path) in [nil, Config.conventional_csv_path("smkwlab")]
+      {:ok, _pid} = Config.load(path)
+
+      assert Config.get(:csv_path) == nil
     end
   end
 
