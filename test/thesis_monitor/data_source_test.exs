@@ -227,6 +227,14 @@ defmodule ThesisMonitor.DataSourceTest do
       assert DataSource.needs_latest_branch?(student) == false
     end
 
+    test "legacy registry entries stay tracked via the mirrored type field (issue #11)" do
+      # local.ex は type と repo_type の両方に registry の repository_type を
+      # 入れるため、移行前の legacy thesis エントリは type 節で追跡が継続する
+      # （データ移行までの断絶は発生しない）
+      student = %Student{type: "thesis", repo_type: "thesis"}
+      assert DataSource.needs_latest_branch?(student) == true
+    end
+
     test "returns false for other types" do
       student = %Student{type: "wr"}
       assert DataSource.needs_latest_branch?(student) == false
