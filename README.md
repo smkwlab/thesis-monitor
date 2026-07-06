@@ -48,7 +48,7 @@ sudo cp thesis-monitor /usr/local/bin/
 ### 初期セットアップ
 
 ```bash
-# 本番セットアップ: ~/.thesis-monitor.yml の生成と doctor 検証を行う
+# 本番セットアップ: ~/.config/thesis-monitor/config.yml の生成と doctor 検証を行う
 # （レジストリは GitHub API で読むため clone は不要）
 thesis-monitor init
 
@@ -110,7 +110,8 @@ thesis-monitor status --config ./my-config.yml
 
 ### 設定ファイル
 
-`~/.thesis-monitor.yml` または `./config/thesis-monitor.yml` に設定ファイルを配置できます
+`~/.config/thesis-monitor/config.yml` または `./config/thesis-monitor.yml` に設定ファイルを配置できます
+（旧 `~/.thesis-monitor.yml` も当面は警告付きで読み込みます）
 （`config/thesis-monitor.yml.example` 参照。`thesis-monitor init` で自動生成されます）。
 
 ```yaml

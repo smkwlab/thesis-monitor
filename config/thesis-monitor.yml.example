@@ -1,5 +1,5 @@
 # Thesis Monitor Configuration Example
-# Copy this file to ~/.thesis-monitor.yml and customize
+# Copy this file to ~/.config/thesis-monitor/config.yml and customize
 # (or run `thesis-monitor init` to generate one)
 
 # GitHub Settings

@@ -2,7 +2,7 @@ defmodule ThesisMonitor.Commands.Init do
   @moduledoc """
   セットアップコマンド
 
-  設定ファイル（~/.thesis-monitor.yml）の生成と doctor 検証を行う。
+  設定ファイル（~/.config/thesis-monitor/config.yml）の生成と doctor 検証を行う。
   レジストリは GitHub contents API で読むため clone は不要（issue #14）。
   `--registry-dir` 指定時のみ legacy のローカル checkout 読みの設定を生成する。
 
@@ -53,8 +53,9 @@ defmodule ThesisMonitor.Commands.Init do
     }
   end
 
+  # --test サンドボックスは意図的に cwd ローカル（本番 config と混ざらない）
   defp default_config_path(true), do: "./thesis-monitor-test.yml"
-  defp default_config_path(false), do: Path.expand("~/.thesis-monitor.yml")
+  defp default_config_path(false), do: ThesisMonitor.Config.default_config_path()
 
   # --- レジストリ取得元の解決 ---
 
@@ -86,6 +87,7 @@ defmodule ThesisMonitor.Commands.Init do
 
   defp write_config(params, location, output) do
     content = build_config_yaml(params, location)
+    File.mkdir_p(Path.dirname(params.config_path))
 
     case File.write(params.config_path, content) do
       :ok ->
