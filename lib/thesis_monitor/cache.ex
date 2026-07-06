@@ -67,7 +67,8 @@ defmodule ThesisMonitor.Cache do
       :ok
     else
       _ ->
-        File.rm(tmp)
+        # キャッシュは best-effort: 後始末の失敗（tmp 未作成の :enoent 等）も無視する
+        _ = File.rm(tmp)
         :ok
     end
   end

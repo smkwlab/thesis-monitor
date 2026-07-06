@@ -53,6 +53,9 @@ defmodule ThesisMonitor.DataSource.Registry do
 
   @doc """
   保護設定完了済み学生のリストを取得（protection-status ファイル。無ければ空）
+
+  ファイル不在（404）は任意ファイルなので空リストだが、401/403 は
+  レジストリ自体への権限欠如と同義なので registry.json と同様に raise する
   """
   def get_students(config_fn \\ &Config.get/1, fetch_fn \\ &GitHubAPI.get_file_contents/2) do
     case resolve_source(config_fn) do

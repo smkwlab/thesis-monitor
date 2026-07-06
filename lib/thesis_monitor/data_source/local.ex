@@ -102,11 +102,20 @@ defmodule ThesisMonitor.DataSource.Local do
 
   @doc false
   # registry.json の本文をパースする。ローカル読みは従来どおり
-  # 不正 JSON を空リストに畳む（API 経路は Registry 側で strict に扱う）
+  # 不正 JSON を空リストに畳む（API 経路は Registry 側で strict に扱う）が、
+  # 「学生ゼロ」の原因が分かるよう警告だけは出す
   def parse_registry_content(content) do
     case Jason.decode(content) do
-      {:ok, data} -> {:ok, parse_registry_data(data)}
-      {:error, _} -> {:ok, []}
+      {:ok, data} ->
+        {:ok, parse_registry_data(data)}
+
+      {:error, _} ->
+        IO.puts(
+          :stderr,
+          "warning: registry file contains invalid JSON; treating it as empty"
+        )
+
+        {:ok, []}
     end
   end
 
