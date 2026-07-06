@@ -13,7 +13,11 @@ defmodule ThesisMonitor.DataSource.LocalTest do
 
       students = Local.parse_protection_content(content)
 
-      assert [%Student{id: "k21rs001", status: :protected}, %Student{id: "k22jk002"}] = students
+      assert [
+               %Student{id: "k21rs001", status: :protected},
+               %Student{id: "k22jk002", status: :protected}
+             ] = students
+
       assert hd(students).repo_name == "k21rs001-sotsuron"
     end
   end

@@ -17,26 +17,30 @@ defmodule ThesisMonitor.DataSource.Registry do
   @registry_file_path "data/registry.json"
   @protection_file_path "data/protection-status/completed-protection.txt"
 
+  # 読み取り先リポジトリ（owner/repo）を解決する: 明示設定 > 規約導出
   @doc false
-  def resolve_source(config_fn \\ &Config.get/1) do
+  def resolve_repo(config_fn \\ &Config.get/1) do
     case config_fn.(:registry_repo) do
       repo when is_binary(repo) and repo != "" ->
-        {:api, repo}
+        repo
 
       _ ->
-        {:api, "#{config_fn.(:github_org)}/#{@registry_repo_basename}"}
+        "#{config_fn.(:github_org)}/#{@registry_repo_basename}"
     end
   end
 
   @doc """
   レジストリ（registry.json）から学生情報を取得
+
+  取得失敗は raise するため、エラータプルは返さない
   """
+  @spec get_registry_students((atom() -> term()), (String.t(), String.t() -> term())) ::
+          {:ok, [ThesisMonitor.Student.t()]}
   def get_registry_students(
         config_fn \\ &Config.get/1,
         fetch_fn \\ &GitHubAPI.get_file_contents/2
       ) do
-    {:api, repo} = resolve_source(config_fn)
-    fetch_registry(repo, config_fn, fetch_fn)
+    fetch_registry(resolve_repo(config_fn), config_fn, fetch_fn)
   end
 
   @doc """
@@ -45,8 +49,10 @@ defmodule ThesisMonitor.DataSource.Registry do
   ファイル不在（404）は任意ファイルなので空リストだが、401/403 は
   レジストリ自体への権限欠如と同義なので registry.json と同様に raise する
   """
+  @spec get_students((atom() -> term()), (String.t(), String.t() -> term())) ::
+          {:ok, [ThesisMonitor.Student.t()]}
   def get_students(config_fn \\ &Config.get/1, fetch_fn \\ &GitHubAPI.get_file_contents/2) do
-    {:api, repo} = resolve_source(config_fn)
+    repo = resolve_repo(config_fn)
 
     case fetch_cached(repo, @protection_file_path, config_fn, fetch_fn) do
       {:ok, content} -> {:ok, Local.parse_protection_content(content)}

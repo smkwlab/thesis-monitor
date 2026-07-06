@@ -36,21 +36,21 @@ defmodule ThesisMonitor.DataSource.RegistryTest do
     fn key -> Map.get(config, key) end
   end
 
-  describe "resolve_source/1" do
-    test "explicit registry_repo resolves to api source" do
-      assert {:api, "testorg/thesis-student-registry"} = Registry.resolve_source(api_config())
+  describe "resolve_repo/1" do
+    test "explicit registry_repo wins" do
+      assert Registry.resolve_repo(api_config()) == "testorg/thesis-student-registry"
     end
 
-    test "neither key resolves to the org convention repo" do
+    test "unset registry_repo resolves to the org convention repo" do
       config = api_config(%{registry_repo: nil})
 
-      assert {:api, "testorg/thesis-student-registry"} = Registry.resolve_source(config)
+      assert Registry.resolve_repo(config) == "testorg/thesis-student-registry"
     end
 
     test "empty registry_repo string falls back to the convention" do
       config = api_config(%{registry_repo: ""})
 
-      assert {:api, "testorg/thesis-student-registry"} = Registry.resolve_source(config)
+      assert Registry.resolve_repo(config) == "testorg/thesis-student-registry"
     end
   end
 
