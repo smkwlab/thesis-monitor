@@ -145,7 +145,7 @@ defmodule ThesisMonitor.CLI do
       --force             既存の設定ファイルを上書き
 
     Examples:
-      thesis-monitor init                 # 本番セットアップ（~/.thesis-monitor.yml 生成）
+      thesis-monitor init                 # 本番セットアップ（~/.config/thesis-monitor/config.yml 生成）
       thesis-monitor init --test          # テスト用サンドボックス（./thesis-monitor-test.yml 生成）
       thesis-monitor status
       thesis-monitor status --show-protection
@@ -162,7 +162,7 @@ defmodule ThesisMonitor.CLI do
       thesis-monitor search "田中" --format json
 
     Configuration:
-      設定ファイル: ~/.thesis-monitor.yml または ./config/thesis-monitor.yml
+      設定ファイル: ~/.config/thesis-monitor/config.yml または ./config/thesis-monitor.yml
       設定例: config/thesis-monitor.yml.example を参照
       
     Configuration keys:

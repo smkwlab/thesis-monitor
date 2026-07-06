@@ -13,7 +13,7 @@ defmodule ThesisMonitor.DataSource.Local do
     case config_fn.(:registry_dir) do
       nil ->
         raise RuntimeError, """
-        Registry directory not configured. Please create ~/.thesis-monitor.yml with:
+        Registry directory not configured. Please run `thesis-monitor init` or create ~/.config/thesis-monitor/config.yml with:
 
         registry_dir: "/path/to/thesis-student-registry/data"
 

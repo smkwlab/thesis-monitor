@@ -27,6 +27,8 @@ defmodule ThesisMonitor.Config do
   end
 
   def load(config_path \\ nil) do
+    user_config_path = default_config_path()
+
     config =
       cond do
         config_path && File.exists?(config_path) ->
@@ -35,8 +37,8 @@ defmodule ThesisMonitor.Config do
         File.exists?("./config/thesis-monitor.yml") ->
           load_from_file("./config/thesis-monitor.yml")
 
-        File.exists?(Path.expand("~/.thesis-monitor.yml")) ->
-          load_from_file(Path.expand("~/.thesis-monitor.yml"))
+        File.exists?(user_config_path) ->
+          load_from_file(user_config_path)
 
         true ->
           @default_config
@@ -89,6 +91,14 @@ defmodule ThesisMonitor.Config do
   def conventional_csv_path(github_org, home \\ System.user_home!())
       when is_binary(github_org) and is_binary(home) do
     Path.join([home, ".config", github_org, "students.csv"])
+  end
+
+  @doc """
+  既定の設定ファイルパス（issue #18 で ~/.config/thesis-monitor/config.yml に統一。
+  旧 ~/.thesis-monitor.yml は読み込まない — 公開前に fallback を持たない決定）
+  """
+  def default_config_path(home \\ System.user_home!()) when is_binary(home) do
+    Path.join([home, ".config", "thesis-monitor", "config.yml"])
   end
 
   # Agent 未起動（escript の init 経路など Config.load 前の呼び出し）は
