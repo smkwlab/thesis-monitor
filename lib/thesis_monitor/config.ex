@@ -54,19 +54,19 @@ defmodule ThesisMonitor.Config do
     end
   end
 
-  @doc """
-  csv_path 未設定（nil / 空文字列）のとき、規約パス
-  `~/.config/<github_org>/students.csv` が存在すればそれを使う（issue #16）。
-
-  明示設定が常に優先。registry-manager も同じ規約パスを参照する。
-  名簿はローカル管理方針のためリポジトリ・レジストリには置かない。
-  """
-  def apply_csv_convention(config, home \\ System.user_home!())
+  # csv_path 未設定（nil / 空文字列）のとき、規約パス
+  # ~/.config/<github_org>/students.csv が存在すればそれを使う（issue #16）。
+  # 明示設定が常に優先。registry-manager も同じ規約パスを参照する。
+  # 名簿はローカル管理方針のためリポジトリ・レジストリには置かない。
+  # load の内部実装だが、home を注入したテストのために public にしている。
+  # 空文字列は nil に正規化する（Map.put は "" → nil の正規化を兼ねる）
+  @doc false
+  def apply_csv_convention(config, home \\ System.user_home())
 
   def apply_csv_convention(%{csv_path: csv} = config, home) when csv in [nil, ""] do
-    conventional = conventional_csv_path(config.github_org, home)
+    conventional = safe_conventional_csv_path(Map.get(config, :github_org), home)
 
-    if File.exists?(conventional) do
+    if conventional && File.exists?(conventional) do
       Map.put(config, :csv_path, conventional)
     else
       Map.put(config, :csv_path, nil)
@@ -75,10 +75,19 @@ defmodule ThesisMonitor.Config do
 
   def apply_csv_convention(config, _home), do: config
 
+  # github_org / home が使えない環境（未設定・HOME なし）では規約導出をスキップ
+  defp safe_conventional_csv_path(github_org, home)
+       when is_binary(github_org) and github_org != "" and is_binary(home) do
+    conventional_csv_path(github_org, home)
+  end
+
+  defp safe_conventional_csv_path(_github_org, _home), do: nil
+
   @doc """
   組織の名簿 CSV の規約パスを返す
   """
-  def conventional_csv_path(github_org, home \\ System.user_home!()) do
+  def conventional_csv_path(github_org, home \\ System.user_home!())
+      when is_binary(github_org) and is_binary(home) do
     Path.join([home, ".config", github_org, "students.csv"])
   end
 
