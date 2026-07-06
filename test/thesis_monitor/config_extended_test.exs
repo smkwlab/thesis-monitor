@@ -243,6 +243,28 @@ defmodule ThesisMonitor.ConfigExtendedTest do
     end
   end
 
+  describe "agent-less fallback (issue #14)" do
+    # escript の init 経路は Config.load を呼ばないまま Config.get に到達する。
+    # Agent 未起動は GenServer.call の exit になるため、rescue だけでは捕捉できない
+    test "get falls back to defaults when the Config agent is not running" do
+      refute Process.whereis(Config)
+
+      assert Config.get(:github_org) == "smkwlab"
+    end
+
+    test "get expands path defaults when the Config agent is not running" do
+      refute Process.whereis(Config)
+
+      assert Config.get(:cache_dir) == Path.expand("~/.cache/thesis-monitor")
+    end
+
+    test "get_all falls back to defaults when the Config agent is not running" do
+      refute Process.whereis(Config)
+
+      assert Config.get_all()[:github_org] == "smkwlab"
+    end
+  end
+
   describe "load configuration from different sources" do
     test "loads from explicit config path" do
       config_content = """

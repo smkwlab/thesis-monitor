@@ -52,30 +52,37 @@ defmodule ThesisMonitor.Config do
     end
   end
 
+  # Agent 未起動（escript の init 経路など Config.load 前の呼び出し）は
+  # GenServer.call の exit になるため、rescue に加えて catch :exit が必要
   def get(key) when is_atom(key) do
     value = Agent.get(__MODULE__, &Map.get(&1, key))
-
-    # パス系キーはチルダを展開
-    case {key, value} do
-      {:registry_dir, path} when is_binary(path) -> Path.expand(path)
-      {:cache_dir, path} when is_binary(path) -> Path.expand(path)
-      {:csv_path, path} when is_binary(path) -> Path.expand(path)
-      _ -> value
-    end
+    expand_path_value(key, value)
   rescue
-    _ ->
-      default_value = Map.get(@default_config, key)
-
-      case {key, default_value} do
-        {:cache_dir, path} when is_binary(path) -> Path.expand(path)
-        _ -> default_value
-      end
+    _ -> default_get(key)
+  catch
+    :exit, _ -> default_get(key)
   end
 
   def get_all do
     Agent.get(__MODULE__, & &1)
   rescue
     _ -> @default_config
+  catch
+    :exit, _ -> @default_config
+  end
+
+  defp default_get(key) do
+    expand_path_value(key, Map.get(@default_config, key))
+  end
+
+  # パス系キーはチルダを展開
+  defp expand_path_value(key, value) do
+    case {key, value} do
+      {:registry_dir, path} when is_binary(path) -> Path.expand(path)
+      {:cache_dir, path} when is_binary(path) -> Path.expand(path)
+      {:csv_path, path} when is_binary(path) -> Path.expand(path)
+      _ -> value
+    end
   end
 
   defp load_from_file(path) do
