@@ -35,8 +35,8 @@ defmodule ThesisMonitor.Config do
         File.exists?("./config/thesis-monitor.yml") ->
           load_from_file("./config/thesis-monitor.yml")
 
-        user_config = resolve_user_config_path() ->
-          load_from_file(user_config)
+        File.exists?(default_config_path()) ->
+          load_from_file(default_config_path())
 
         true ->
           @default_config
@@ -92,42 +92,11 @@ defmodule ThesisMonitor.Config do
   end
 
   @doc """
-  既定の設定ファイルパス（issue #18 で ~/.config/thesis-monitor/config.yml に統一）
+  既定の設定ファイルパス（issue #18 で ~/.config/thesis-monitor/config.yml に統一。
+  旧 ~/.thesis-monitor.yml は読み込まない — 公開前に fallback を持たない決定）
   """
   def default_config_path(home \\ System.user_home!()) when is_binary(home) do
     Path.join([home, ".config", "thesis-monitor", "config.yml"])
-  end
-
-  @doc """
-  旧来の設定ファイルパス（1 世代 fallback）
-  """
-  def legacy_config_path(home \\ System.user_home!()) when is_binary(home) do
-    Path.join(home, ".thesis-monitor.yml")
-  end
-
-  # 探索順: 新パス → 旧 dotfile（警告付き 1 世代 fallback）→ nil（デフォルト設定）
-  # home はテストのために注入可能
-  @doc false
-  def resolve_user_config_path(home \\ System.user_home!()) do
-    new_path = default_config_path(home)
-    legacy_path = legacy_config_path(home)
-
-    cond do
-      File.exists?(new_path) ->
-        new_path
-
-      File.exists?(legacy_path) ->
-        IO.puts(
-          :stderr,
-          "warning: config file \"#{legacy_path}\" is deprecated, " <>
-            "move it to \"#{new_path}\""
-        )
-
-        legacy_path
-
-      true ->
-        nil
-    end
   end
 
   # Agent 未起動（escript の init 経路など Config.load 前の呼び出し）は

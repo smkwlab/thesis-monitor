@@ -163,7 +163,6 @@ defmodule ThesisMonitor.CLI do
 
     Configuration:
       設定ファイル: ~/.config/thesis-monitor/config.yml または ./config/thesis-monitor.yml
-      （旧 ~/.thesis-monitor.yml も当面は警告付きで読み込む）
       設定例: config/thesis-monitor.yml.example を参照
       
     Configuration keys:

@@ -111,7 +111,7 @@ thesis-monitor status --config ./my-config.yml
 ### 設定ファイル
 
 `~/.config/thesis-monitor/config.yml` または `./config/thesis-monitor.yml` に設定ファイルを配置できます
-（旧 `~/.thesis-monitor.yml` も当面は警告付きで読み込みます）
+（旧 `~/.thesis-monitor.yml` は読み込まれません。`mkdir -p ~/.config/thesis-monitor && mv ~/.thesis-monitor.yml ~/.config/thesis-monitor/config.yml` で移行）
 （`config/thesis-monitor.yml.example` 参照。`thesis-monitor init` で自動生成されます）。
 
 ```yaml

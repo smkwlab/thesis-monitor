@@ -179,50 +179,9 @@ defmodule ThesisMonitor.ConfigExtendedTest do
   end
 
   describe "config file location (issue #18)" do
-    defp make_loc_home do
-      home = Path.join(System.tmp_dir(), "tm-loc-home-#{System.unique_integer([:positive])}")
-      File.mkdir_p!(home)
-      on_exit(fn -> File.rm_rf!(home) end)
-      home
-    end
-
     test "default config path is ~/.config/thesis-monitor/config.yml" do
       assert Config.default_config_path("/home/x") ==
                "/home/x/.config/thesis-monitor/config.yml"
-    end
-
-    test "legacy config path is ~/.thesis-monitor.yml" do
-      assert Config.legacy_config_path("/home/x") == "/home/x/.thesis-monitor.yml"
-    end
-
-    test "resolve_user_config_path prefers the new location" do
-      home = make_loc_home()
-      new_path = Config.default_config_path(home)
-      File.mkdir_p!(Path.dirname(new_path))
-      File.write!(new_path, "github_org: neworg\n")
-      File.write!(Config.legacy_config_path(home), "github_org: oldorg\n")
-
-      assert Config.resolve_user_config_path(home) == new_path
-    end
-
-    test "falls back to the legacy dotfile with a deprecation warning" do
-      home = make_loc_home()
-      legacy = Config.legacy_config_path(home)
-      File.write!(legacy, "github_org: oldorg\n")
-
-      stderr =
-        ExUnit.CaptureIO.capture_io(:stderr, fn ->
-          assert Config.resolve_user_config_path(home) == legacy
-        end)
-
-      assert stderr =~ "deprecated"
-      assert stderr =~ "config.yml"
-    end
-
-    test "returns nil when neither location exists" do
-      home = make_loc_home()
-
-      assert Config.resolve_user_config_path(home) == nil
     end
   end
 
