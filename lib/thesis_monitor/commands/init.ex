@@ -87,9 +87,13 @@ defmodule ThesisMonitor.Commands.Init do
 
   defp write_config(params, location, output) do
     content = build_config_yaml(params, location)
-    File.mkdir_p(Path.dirname(params.config_path))
 
-    case File.write(params.config_path, content) do
+    result =
+      with :ok <- File.mkdir_p(Path.dirname(params.config_path)) do
+        File.write(params.config_path, content)
+      end
+
+    case result do
       :ok ->
         call(output, :success, "Wrote config: #{params.config_path}")
         :ok

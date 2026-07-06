@@ -129,6 +129,21 @@ defmodule ThesisMonitor.Commands.InitTest do
     end
   end
 
+  describe "run/3 config generation failures" do
+    test "reports an error when the config directory cannot be created" do
+      # 親「ディレクトリ」が実はファイル → File.mkdir_p が :enotdir で失敗する
+      blocker = tmp_path("init_blocker")
+      File.write!(blocker, "not a directory")
+      on_exit(fn -> File.rm(blocker) end)
+      config = Path.join([blocker, "sub", "config.yml"])
+
+      assert {:error, :config_write_failed} =
+               Init.run([], [config: config], %{output: output_stub(), gh: gh_ok_stub()})
+
+      assert Enum.any?(collect_output(:error), &(&1 =~ "Failed to write config"))
+    end
+  end
+
   describe "run/3 legacy local mode (--registry-dir)" do
     test "writes registry_dir instead of registry_repo" do
       checkout = make_registry_checkout("init_local")
