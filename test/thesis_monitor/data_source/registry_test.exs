@@ -110,6 +110,52 @@ defmodule ThesisMonitor.DataSource.RegistryTest do
       end
     end
 
+    test "raises when the fetched registry content is invalid JSON (no silent zero)" do
+      fetch = fn _repo, "data/registry.json" -> {:ok, "{broken json"} end
+
+      assert_raise RuntimeError, ~r/JSON/i, fn ->
+        Registry.get_registry_students(api_config(), fetch)
+      end
+    end
+
+    test "raises when a cached registry entry is invalid JSON (corrupted cache)" do
+      config = api_config(%{cache_ttl: 1800})
+
+      # 1 回目で正常な内容をキャッシュさせた後、キャッシュファイルを破損させる
+      fetch = fn _repo, "data/registry.json" -> {:ok, @registry_json} end
+      assert {:ok, [_]} = Registry.get_registry_students(config, fetch)
+
+      cache_dir = config.(:cache_dir)
+      [cache_file] = File.ls!(cache_dir)
+      File.write!(Path.join(cache_dir, cache_file), "{truncated")
+
+      no_fetch = fn _repo, _path -> flunk("must hit cache") end
+
+      assert_raise RuntimeError, ~r/JSON/i, fn ->
+        Registry.get_registry_students(config, no_fetch)
+      end
+    end
+
+    test "does not cache invalid JSON (next run refetches)" do
+      config = api_config(%{cache_ttl: 1800})
+      counter = :counters.new(1, [])
+
+      fetch = fn _repo, "data/registry.json" ->
+        :counters.add(counter, 1, 1)
+
+        if :counters.get(counter, 1) == 1,
+          do: {:ok, "{broken json"},
+          else: {:ok, @registry_json}
+      end
+
+      assert_raise RuntimeError, ~r/JSON/i, fn ->
+        Registry.get_registry_students(config, fetch)
+      end
+
+      assert {:ok, [_]} = Registry.get_registry_students(config, fetch)
+      assert :counters.get(counter, 1) == 2
+    end
+
     test "uses the cache within TTL (fetch called once)" do
       config = api_config(%{cache_ttl: 1800})
       counter = :counters.new(1, [])

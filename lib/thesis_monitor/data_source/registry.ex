@@ -69,9 +69,9 @@ defmodule ThesisMonitor.DataSource.Registry do
   end
 
   defp fetch_registry(repo, config_fn, fetch_fn) do
-    case fetch_cached(repo, @registry_file_path, config_fn, fetch_fn) do
-      {:ok, content} ->
-        Local.parse_registry_content(content)
+    case fetch_json_cached(repo, @registry_file_path, config_fn, fetch_fn) do
+      {:ok, data} ->
+        {:ok, Local.parse_registry_data(data)}
 
       {:error, :not_found} ->
         fetch_legacy_registry(repo, config_fn, fetch_fn)
@@ -82,9 +82,9 @@ defmodule ThesisMonitor.DataSource.Registry do
   end
 
   defp fetch_legacy_registry(repo, config_fn, fetch_fn) do
-    case fetch_cached(repo, @legacy_registry_file_path, config_fn, fetch_fn) do
-      {:ok, content} ->
-        Local.parse_registry_content(content)
+    case fetch_json_cached(repo, @legacy_registry_file_path, config_fn, fetch_fn) do
+      {:ok, data} ->
+        {:ok, Local.parse_registry_data(data)}
 
       {:error, :not_found} ->
         raise RuntimeError, """
@@ -104,6 +104,35 @@ defmodule ThesisMonitor.DataSource.Registry do
     Cache.get_or_fetch("#{repo}:#{path}", fn -> fetch_fn.(repo, path) end, config_fn)
   end
 
+  # JSON ファイル用: fetch 時に検証してから（Cache 側で）保存し、不正 JSON を
+  # 学生ゼロに畳まず明示エラーにする。キャッシュ済み内容の decode 失敗
+  # （ファイル破損など）も同様に {:error, :invalid_json} → raise に載せる
+  defp fetch_json_cached(repo, path, config_fn, fetch_fn) do
+    validated_fetch = fn ->
+      with {:ok, content} <- fetch_fn.(repo, path) do
+        validate_json(content)
+      end
+    end
+
+    case Cache.get_or_fetch("#{repo}:#{path}", validated_fetch, config_fn) do
+      {:ok, content} ->
+        case Jason.decode(content) do
+          {:ok, data} -> {:ok, data}
+          {:error, _} -> {:error, :invalid_json}
+        end
+
+      error ->
+        error
+    end
+  end
+
+  defp validate_json(content) do
+    case Jason.decode(content) do
+      {:ok, _} -> {:ok, content}
+      {:error, _} -> {:error, :invalid_json}
+    end
+  end
+
   @spec raise_api_error(String.t(), String.t(), term()) :: no_return()
   defp raise_api_error(repo, path, :unauthorized) do
     raise RuntimeError, """
@@ -111,6 +140,15 @@ defmodule ThesisMonitor.DataSource.Registry do
 
     レジストリは private リポジトリです。トークンに #{repo} の Contents: Read
     権限があるか確認してください（gh auth status / GITHUB_TOKEN / config の github_token）。
+    """
+  end
+
+  defp raise_api_error(repo, path, :invalid_json) do
+    raise RuntimeError, """
+    Registry file #{repo}/#{path} contains invalid JSON.
+
+    上流ファイルの破損、またはローカルキャッシュ（config の cache_dir 配下）の
+    破損が考えられます。キャッシュを削除して再実行してください。
     """
   end
 

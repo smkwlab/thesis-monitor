@@ -99,4 +99,27 @@ defmodule ThesisMonitor.DataSource.GitHubAPITest do
       assert {:get_file_contents, 2} in GitHubAPI.__info__(:functions)
     end
   end
+
+  describe "handle_contents_result/1 (issue #14)" do
+    # 404（不在）と 401/403（権限不足）の区別は「private レジストリで
+    # トークン欠如時に学生ゼロと沈黙しない」ための中核マッピング
+    test "maps 404 to :not_found" do
+      assert {:error, :not_found} = GitHubAPI.handle_contents_result({:error, 404})
+    end
+
+    test "maps 401 and 403 to :unauthorized" do
+      assert {:error, :unauthorized} = GitHubAPI.handle_contents_result({:error, 401})
+      assert {:error, :unauthorized} = GitHubAPI.handle_contents_result({:error, 403})
+    end
+
+    test "passes other errors through" do
+      assert {:error, 500} = GitHubAPI.handle_contents_result({:error, 500})
+      assert {:error, :timeout} = GitHubAPI.handle_contents_result({:error, :timeout})
+    end
+
+    test "decodes a successful response body" do
+      body = %{"content" => Base.encode64("hello"), "encoding" => "base64"}
+      assert {:ok, "hello"} = GitHubAPI.handle_contents_result({:ok, body})
+    end
+  end
 end

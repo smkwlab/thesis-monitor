@@ -226,14 +226,18 @@ defmodule ThesisMonitor.DataSource.GitHubAPI do
   """
   def get_file_contents(repo_full_name, path) do
     url = "#{@base_url}/repos/#{repo_full_name}/contents/#{path}"
-
-    case make_request(url) do
-      {:ok, body} -> decode_contents_response(body)
-      {:error, 404} -> {:error, :not_found}
-      {:error, status} when status in [401, 403] -> {:error, :unauthorized}
-      {:error, reason} -> {:error, reason}
-    end
+    handle_contents_result(make_request(url))
   end
+
+  @doc false
+  # make_request の結果を contents API の意味論に写す（テスト可能な純粋関数）
+  def handle_contents_result({:ok, body}), do: decode_contents_response(body)
+  def handle_contents_result({:error, 404}), do: {:error, :not_found}
+
+  def handle_contents_result({:error, status}) when status in [401, 403],
+    do: {:error, :unauthorized}
+
+  def handle_contents_result({:error, reason}), do: {:error, reason}
 
   @doc false
   # contents API の content は base64（60 桁ごとに改行入り）で返る

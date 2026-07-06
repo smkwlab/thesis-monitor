@@ -93,19 +93,20 @@ defmodule ThesisMonitor.DataSource.Local do
   end
 
   @doc false
-  # registry.json の本文をパースする（API 経路からも使う）
+  # デコード済みレジストリデータを学生リストにする（API 経路からも使う）
+  def parse_registry_data(data) do
+    data
+    |> Enum.map(&parse_registry_entry/1)
+    |> Enum.reject(&is_nil/1)
+  end
+
+  @doc false
+  # registry.json の本文をパースする。ローカル読みは従来どおり
+  # 不正 JSON を空リストに畳む（API 経路は Registry 側で strict に扱う）
   def parse_registry_content(content) do
     case Jason.decode(content) do
-      {:ok, data} ->
-        students =
-          data
-          |> Enum.map(&parse_registry_entry/1)
-          |> Enum.reject(&is_nil/1)
-
-        {:ok, students}
-
-      {:error, _} ->
-        {:ok, []}
+      {:ok, data} -> {:ok, parse_registry_data(data)}
+      {:error, _} -> {:ok, []}
     end
   end
 

@@ -56,11 +56,19 @@ defmodule ThesisMonitor.Cache do
 
   defp read_fresh(_path, _ttl), do: :miss
 
+  # 一時ファイル + rename のアトミック書き込み。中断や並行実行で
+  # 書きかけの内容が TTL 内のフレッシュなキャッシュとして残るのを防ぐ
   defp write(path, content) do
-    with :ok <- File.mkdir_p(Path.dirname(path)) do
-      File.write(path, content)
-    end
+    tmp = "#{path}.tmp.#{:erlang.unique_integer([:positive])}"
 
-    :ok
+    with :ok <- File.mkdir_p(Path.dirname(path)),
+         :ok <- File.write(tmp, content),
+         :ok <- File.rename(tmp, path) do
+      :ok
+    else
+      _ ->
+        File.rm(tmp)
+        :ok
+    end
   end
 end
