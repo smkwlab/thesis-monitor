@@ -1,43 +1,44 @@
 # Thesis Monitor
 
-学生論文リポジトリ管理ツール（Elixir escript版）
+学生リポジトリ監視ツール（Elixir escript）
 
 ## 概要
 
-`thesis_monitor`は、多数の学生リポジトリ（週報・レポート・卒業論文など）を
-効率的に監視・管理するためのコマンドラインツールです。
-従来のシェルスクリプト版を Elixir で再実装し、以下の改善を実現しました：
+`thesis-monitor` は、多数の学生リポジトリ（週報・レポート・卒業論文・修士論文・
+研究会原稿など）を効率的に監視するためのコマンドラインツールです。
+レジストリデータリポジトリ（[registry-manager](https://github.com/smkwlab/registry-manager)
+が管理する `data/registry.json`）を索引として、各リポジトリの状態・最新 draft
+ブランチ・ブランチ保護状況を GitHub API から並列取得します。
 
-- **並行処理**: 複数学生の情報を並列取得（最大10倍高速化）
-- **型安全**: Dialyzerによる静的型チェック
-- **エラー処理**: OTPによる堅牢なエラーハンドリング
-- **単一バイナリ**: escriptによる依存関係なしの配布
+- **並行処理**: 複数学生の情報を並列取得（`Task.async_stream`）
+- **型安全**: Dialyzer による静的型チェック
+- **単一バイナリ**: escript による依存関係なしの配布
 
 ## インストール
 
 ### 前提条件
 
-- Elixir 1.14以上
-- Erlang/OTP 25以上
+- Elixir 1.14 以上
+- Erlang/OTP 25 以上
 
 ### ビルド方法
 
 ```bash
-cd thesis_monitor
+# リポジトリのルートで
 mix deps.get
 mix escript.build
 ```
 
-ビルドが完了すると、実行可能な`thesis_monitor`バイナリが生成されます。
+ビルドが完了すると、実行可能な `thesis-monitor` バイナリが生成されます。
 
 ### システムへのインストール
 
 ```bash
-# ローカルbinディレクトリにコピー
-cp thesis_monitor ~/.local/bin/
+# ローカル bin ディレクトリにコピー
+cp thesis-monitor ~/.local/bin/
 
-# または/usr/local/binにインストール（要sudo）
-sudo cp thesis_monitor /usr/local/bin/
+# または /usr/local/bin にインストール（要 sudo）
+sudo cp thesis-monitor /usr/local/bin/
 ```
 
 ## 使用方法
@@ -63,44 +64,52 @@ thesis-monitor init --registry-dir /path/to/thesis-student-registry/data
 ### 基本コマンド
 
 ```bash
-# 全学生リポジトリの状態表示
-thesis_monitor status
+# 全学生リポジトリの状態表示（最新 draft ブランチ・最終更新）
+thesis-monitor status
 
 # 最近7日間の活動表示
-thesis_monitor activity
+thesis-monitor activity
 
 # PR/Issue統計表示
-thesis_monitor pr-stats
+thesis-monitor pr-stats
 
 # ブランチ保護設定確認
-thesis_monitor check
+thesis-monitor check
 
-# データ同期
-thesis_monitor sync
+# 一括ブランチ保護設定
+thesis-monitor bulk
+
+# 学生情報を検索・表示
+thesis-monitor search k22rs001
 ```
 
 ### オプション
 
 ```bash
-# JSON形式で出力
-thesis_monitor status --format json
+# JSON / CSV 形式で出力
+thesis-monitor status --format json
+thesis-monitor status --format csv
 
-# CSV形式で出力
-thesis_monitor status --format csv
+# タイプで絞り込み（thesis = 卒論 + 修論のまとめフィルタ）
+thesis-monitor status --type thesis
+thesis-monitor status --type latex
+
+# ブランチ保護状況も表示
+thesis-monitor status --show-protection
 
 # 詳細ログ表示
-thesis_monitor status --verbose
+thesis-monitor status --verbose
 
 # カスタム設定ファイル使用
-thesis_monitor status --config ./my-config.yml
+thesis-monitor status --config ./my-config.yml
 ```
 
 ## 設定
 
 ### 設定ファイル
 
-`~/.thesis-monitor.yml`または`./config/thesis-monitor.yml`に設定ファイルを配置できます
-（`config/thesis-monitor.yml.example` 参照）。
+`~/.thesis-monitor.yml` または `./config/thesis-monitor.yml` に設定ファイルを配置できます
+（`config/thesis-monitor.yml.example` 参照。`thesis-monitor init` で自動生成されます）。
 
 ```yaml
 # GitHub設定
@@ -119,10 +128,13 @@ max_concurrency: 10     # 最大並行リクエスト数
 timeout: 10000          # APIタイムアウト（ミリ秒）
 ```
 
-### 環境変数
+### GitHub 認証
+
+トークンは次の優先順位で解決されます: 設定ファイル > 環境変数 `GITHUB_TOKEN` >
+GitHub CLI（`gh auth token`）。`gh auth login` 済みの環境では追加設定は不要です。
 
 ```bash
-# GitHub APIトークン（必須）
+# 環境変数で指定する場合
 export GITHUB_TOKEN=ghp_xxxxxxxxxxxxx
 ```
 
@@ -132,6 +144,10 @@ export GITHUB_TOKEN=ghp_xxxxxxxxxxxxx
 `data/registry.json`。旧名 `repositories.json` も移行期間中は自動で読み込む）の
 ローカルチェックアウトを指定します。旧キー `data_dir` も当面は警告付きで
 受け付けますが、`registry_dir` への移行を推奨します。
+
+`repository_type` の語彙は `sotsuron` / `master` / `wr` / `ise` / `latex` / `other`
+です（`latex` = latex-template 派生の研究会原稿等で、卒論・修論と同様に draft
+ブランチ追跡の対象。`--type thesis` は `sotsuron` + `master` のまとめフィルタ）。
 データ構造の正本仕様は
 [registry-manager のデータ構造仕様書](https://github.com/smkwlab/registry-manager/blob/main/docs/data-structure-specification.md)
 を参照してください。
@@ -149,20 +165,24 @@ lib/thesis_monitor/
 ├── config.ex           # 設定管理
 ├── student.ex          # 学生データ構造体
 ├── output.ex           # 出力フォーマット
+├── token_manager.ex    # GitHub トークン解決
 ├── data_source.ex      # データソース統合
 ├── data_source/
-│   ├── local.ex        # ローカルファイル読み込み
+│   ├── local.ex        # レジストリ読み込み
 │   └── github_api.ex   # GitHub API クライアント
 └── commands/           # 各コマンドの実装
+    ├── init.ex
     ├── status.ex
     ├── activity.ex
     ├── pr_stats.ex
-    └── sync.ex
+    ├── check.ex
+    ├── bulk.ex
+    └── search.ex
 ```
 
 ### 並行処理
 
-GitHub APIへのリクエストは`Task.async_stream`を使用して並列実行されます：
+GitHub API へのリクエストは `Task.async_stream` を使用して並列実行されます：
 
 ```elixir
 students
@@ -175,56 +195,32 @@ students
 
 ## 開発
 
-### テスト実行
-
 ```bash
-mix test
+mix test          # テスト実行
+mix dialyzer      # 型チェック
+mix credo         # コード品質チェック
 ```
 
-### 型チェック
-
-```bash
-mix dialyzer
-```
-
-### コード品質チェック
-
-```bash
-mix credo
-```
-
-## 移行ガイド
-
-### シェルスクリプト版からの移行
-
-```bash
-# 旧コマンド
-./thesis-repo-manager.sh status
-
-# 新コマンド
-thesis_monitor status
-```
-
-コマンド構造は互換性を保っているため、既存のワークフローを変更する必要はありません。
+CI（GitHub Actions）は共有 workflow により format / compile --warnings-as-errors /
+credo --strict / テストマトリクス（LTS + latest）/ dialyzer（push 時）を実行します。
 
 ## トラブルシューティング
 
-### GitHub API認証エラー
+### GitHub API 認証エラー
 
 ```bash
-# トークンが設定されているか確認
-echo $GITHUB_TOKEN
+# gh CLI の認証状態を確認
+gh auth status
 
-# 正しいトークンを設定
-export GITHUB_TOKEN=ghp_xxxxxxxxxxxxx
+# または環境変数のトークンを確認
+echo $GITHUB_TOKEN
 ```
 
 ### レート制限エラー
 
-```bash
-# キャッシュを有効にして実行
-thesis_monitor status --cache
-```
+API 結果は `cache_dir` に `cache_ttl` 秒（既定 30 分）キャッシュされます。
+大量のリポジトリを頻繁に照会する場合は `max_concurrency` を下げるか、
+`cache_ttl` を延ばしてください。
 
 ## ライセンス
 
