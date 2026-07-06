@@ -71,7 +71,9 @@ defmodule ThesisMonitor.DataSource.RegistryTest do
       end
 
       assert {:ok, [student]} = Registry.get_registry_students(api_config(), fetch)
-      assert %Student{id: "k21rs001", repo_name: "k21rs001-sotsuron", repo_type: "sotsuron"} = student
+
+      assert %Student{id: "k21rs001", repo_name: "k21rs001-sotsuron", repo_type: "sotsuron"} =
+               student
     end
 
     test "falls back to data/repositories.json when registry.json is 404" do

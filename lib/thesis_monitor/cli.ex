@@ -41,7 +41,6 @@ defmodule ThesisMonitor.CLI do
           org: :string,
           registry_repo: :string,
           registry_dir: :string,
-          clone_to: :string,
           force: :boolean
         ],
         aliases: [
@@ -113,7 +112,7 @@ defmodule ThesisMonitor.CLI do
     Usage: thesis-monitor [command] [options]
 
     Commands:
-      init        セットアップ（設定ファイル生成・registry の clone・doctor 検証）
+      init        セットアップ（設定ファイル生成・doctor 検証）
       status      全学生リポジトリの状態を表示
       activity    最近のコミット活動を表示（過去7日間）
       pr-stats    PR/Issue統計を表示
@@ -139,9 +138,10 @@ defmodule ThesisMonitor.CLI do
     Init options:
       --test              テスト用サンドボックス設定を生成（thesis-student-registry-test を使用）
       --org               GitHub organization（デフォルト: smkwlab）
-      --registry-repo     レジストリデータリポジトリ（owner/repo 形式）
-      --registry-dir      既存 checkout の data/ ディレクトリ（指定時は clone しない）
-      --clone-to          clone 先ディレクトリ（デフォルト: ./<repo名>）
+      --registry-repo     レジストリデータリポジトリ（owner/repo 形式。
+                          デフォルト: <org>/thesis-student-registry）
+      --registry-dir      ローカル checkout の data/ を読む legacy 設定を生成
+                          （通常は不要。既定は GitHub API 読み）
       --force             既存の設定ファイルを上書き
 
     Examples:
@@ -165,9 +165,11 @@ defmodule ThesisMonitor.CLI do
       設定ファイル: ~/.thesis-monitor.yml または ./config/thesis-monitor.yml
       設定例: config/thesis-monitor.yml.example を参照
       
-    Required Configuration:
-      registry_dir: thesis-student-registry/data ディレクトリへの絶対パス
-      （旧キー data_dir も当面は警告付きで受け付ける）
+    Configuration keys:
+      registry_repo: レジストリデータリポジトリ（owner/repo）。未設定時は
+                     <github_org>/thesis-student-registry を規約として使用
+      csv_path:      学生名簿 CSV のパス（任意。ローカル管理）
+      （旧キー registry_dir / data_dir / student_csv も当面は警告付きで受け付ける）
     """)
   end
 

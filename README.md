@@ -7,8 +7,10 @@
 `thesis-monitor` は、多数の学生リポジトリ（週報・レポート・卒業論文・修士論文・
 研究会原稿など）を効率的に監視するためのコマンドラインツールです。
 レジストリデータリポジトリ（[registry-manager](https://github.com/smkwlab/registry-manager)
-が管理する `data/registry.json`）を索引として、各リポジトリの状態・最新 draft
-ブランチ・ブランチ保護状況を GitHub API から並列取得します。
+が管理する `data/registry.json`）を GitHub contents API で読み取って索引とし、
+各リポジトリの状態・最新 draft ブランチ・ブランチ保護状況を GitHub API から
+並列取得します。ローカル checkout は不要です（レジストリの応答は
+`cache_dir` に `cache_ttl` 秒キャッシュされます）。
 
 - **並行処理**: 複数学生の情報を並列取得（`Task.async_stream`）
 - **型安全**: Dialyzer による静的型チェック
@@ -46,15 +48,15 @@ sudo cp thesis-monitor /usr/local/bin/
 ### 初期セットアップ
 
 ```bash
-# 本番セットアップ: ~/.thesis-monitor.yml の生成、registry データリポジトリの
-# clone（既存 checkout があればパス設定のみ）、doctor 検証までを一括で行う
+# 本番セットアップ: ~/.thesis-monitor.yml の生成と doctor 検証を行う
+# （レジストリは GitHub API で読むため clone は不要）
 thesis-monitor init
 
 # テスト用サンドボックス: thesis-student-registry-test を使い、
 # ./thesis-monitor-test.yml と分離キャッシュを生成する
 thesis-monitor init --test
 
-# 既存 checkout を使う場合
+# ローカル checkout を読む legacy 設定を生成する場合（通常は不要）
 thesis-monitor init --registry-dir /path/to/thesis-student-registry/data
 ```
 
@@ -115,18 +117,23 @@ thesis-monitor status --config ./my-config.yml
 # GitHub設定
 github_org: your-org
 
-# レジストリディレクトリ（レジストリデータリポジトリのローカルチェックアウト内の data/）
-registry_dir: /path/to/your-student-registry/data
+# レジストリデータリポジトリ（owner/repo、contents API で読み取り）
+# 未設定時は <github_org>/thesis-student-registry を規約として使用
+registry_repo: your-org/thesis-student-registry
 cache_dir: ~/.cache/thesis-monitor
 
-# 学生名取得用CSVファイル（任意）
-student_csv: /path/to/students.csv
+# 学生名取得用CSVファイル（任意。名簿はローカル管理 — リポジトリ・レジストリに置かない）
+csv_path: /path/to/students.csv
 
 # パフォーマンス設定
-cache_ttl: 1800         # キャッシュ有効期限（秒）
+cache_ttl: 1800         # レジストリ/API キャッシュ有効期限（秒）
 max_concurrency: 10     # 最大並行リクエスト数
 timeout: 10000          # APIタイムアウト（ミリ秒）
 ```
+
+registry-manager と設定語彙を共有しています（`github_org` / `registry_repo` /
+`csv_path`）。旧キー `registry_dir`（ローカル checkout 読み）・`data_dir`・
+`student_csv` も当面は警告付きで受け付けます。
 
 ### GitHub 認証
 
@@ -140,10 +147,12 @@ export GITHUB_TOKEN=ghp_xxxxxxxxxxxxx
 
 ### データソース
 
-`registry_dir` には学生リポジトリレジストリ（**private リポジトリ**で管理される
-`data/registry.json`。旧名 `repositories.json` も移行期間中は自動で読み込む）の
-ローカルチェックアウトを指定します。旧キー `data_dir` も当面は警告付きで
-受け付けますが、`registry_dir` への移行を推奨します。
+`registry_repo` には学生リポジトリレジストリ（**private リポジトリ**で管理される
+`data/registry.json`。旧名 `repositories.json` も移行期間中は自動で読み込む）を
+`owner/repo` 形式で指定します。private リポジトリのため、使用するトークンに
+当該リポジトリの Contents: Read 権限が必要です。旧キー `registry_dir`
+（ローカルチェックアウト読み）も当面は警告付きで受け付けますが、
+`registry_repo` への移行を推奨します。
 
 `repository_type` の語彙は `sotsuron` / `master` / `wr` / `ise` / `latex` / `other`
 です（`latex` = latex-template 派生の研究会原稿等で、卒論・修論と同様に draft
@@ -163,12 +172,14 @@ export GITHUB_TOKEN=ghp_xxxxxxxxxxxxx
 lib/thesis_monitor/
 ├── cli.ex              # CLIインターフェース
 ├── config.ex           # 設定管理
+├── cache.ex            # API 応答のファイルキャッシュ
 ├── student.ex          # 学生データ構造体
 ├── output.ex           # 出力フォーマット
 ├── token_manager.ex    # GitHub トークン解決
 ├── data_source.ex      # データソース統合
 ├── data_source/
-│   ├── local.ex        # レジストリ読み込み
+│   ├── registry.ex     # レジストリ読み取り（API / legacy ローカルの解決）
+│   ├── local.ex        # ローカルファイル読み込み（legacy checkout・名簿 CSV）
 │   └── github_api.ex   # GitHub API クライアント
 └── commands/           # 各コマンドの実装
     ├── init.ex

@@ -16,9 +16,10 @@ defmodule ThesisMonitor.Commands.InitTest do
     }
   end
 
-  # 全チェック成功の gh スタブ
+  # 全チェック成功の gh スタブ（clone は API 読み化で廃止済み: 呼ばれたら失敗）
   defp gh_ok_stub do
     fn
+      ["repo", "clone" | _] -> flunk("init must not clone (API-read mode, issue #14)")
       ["auth", "status" | _] -> {:ok, "Logged in"}
       ["api" | _] -> {:ok, "{}"}
       args -> flunk("unexpected gh invocation: #{inspect(args)}")
@@ -48,161 +49,180 @@ defmodule ThesisMonitor.Commands.InitTest do
     end
   end
 
-  describe "run/3 config generation" do
-    test "writes a config file with registry_dir, org, and cache_dir" do
-      checkout = make_registry_checkout("init_checkout")
+  describe "run/3 config generation (API mode)" do
+    test "writes registry_repo, org, and cache_dir without cloning" do
       config = tmp_path("init_config") <> ".yml"
       on_exit(fn -> File.rm(config) end)
 
-      opts = [config: config, registry_dir: Path.join(checkout, "data"), org: "smkwlab"]
+      opts = [config: config, org: "smkwlab"]
 
       assert {:ok, ^config} = Init.run([], opts, %{output: output_stub(), gh: gh_ok_stub()})
 
       content = File.read!(config)
       assert content =~ "github_org: smkwlab"
-      assert content =~ "registry_dir: #{Path.join(checkout, "data")}"
+      assert content =~ "registry_repo: smkwlab/thesis-student-registry"
       assert content =~ "cache_dir: ~/.cache/thesis-monitor"
+      refute content =~ "registry_dir:"
+    end
+
+    test "includes a commented csv_path hint for the local roster CSV" do
+      config = tmp_path("init_config") <> ".yml"
+      on_exit(fn -> File.rm(config) end)
+
+      assert {:ok, _} =
+               Init.run([], [config: config], %{output: output_stub(), gh: gh_ok_stub()})
+
+      assert File.read!(config) =~ "# csv_path:"
+    end
+
+    test "derives registry_repo from --org by convention" do
+      config = tmp_path("init_config") <> ".yml"
+      on_exit(fn -> File.rm(config) end)
+
+      opts = [config: config, org: "myorg"]
+
+      assert {:ok, _} = Init.run([], opts, %{output: output_stub(), gh: gh_ok_stub()})
+
+      content = File.read!(config)
+      assert content =~ "github_org: myorg"
+      assert content =~ "registry_repo: myorg/thesis-student-registry"
+    end
+
+    test "honors an explicit --registry-repo override" do
+      config = tmp_path("init_config") <> ".yml"
+      on_exit(fn -> File.rm(config) end)
+
+      opts = [config: config, registry_repo: "otherorg/custom-registry"]
+
+      assert {:ok, _} = Init.run([], opts, %{output: output_stub(), gh: gh_ok_stub()})
+      assert File.read!(config) =~ "registry_repo: otherorg/custom-registry"
     end
 
     test "refuses to overwrite an existing config without --force" do
-      checkout = make_registry_checkout("init_checkout")
       config = tmp_path("init_config") <> ".yml"
       File.write!(config, "keep: me\n")
       on_exit(fn -> File.rm(config) end)
 
-      opts = [config: config, registry_dir: Path.join(checkout, "data")]
-
       assert {:error, :config_exists} =
-               Init.run([], opts, %{output: output_stub(), gh: gh_ok_stub()})
+               Init.run([], [config: config], %{output: output_stub(), gh: gh_ok_stub()})
 
       assert File.read!(config) == "keep: me\n"
       assert Enum.any?(collect_output(:error), &(&1 =~ "--force"))
     end
 
     test "overwrites an existing config with --force" do
-      checkout = make_registry_checkout("init_checkout")
       config = tmp_path("init_config") <> ".yml"
       File.write!(config, "keep: me\n")
       on_exit(fn -> File.rm(config) end)
 
-      opts = [config: config, registry_dir: Path.join(checkout, "data"), force: true]
+      opts = [config: config, force: true]
 
       assert {:ok, ^config} = Init.run([], opts, %{output: output_stub(), gh: gh_ok_stub()})
-      assert File.read!(config) =~ "registry_dir:"
+      assert File.read!(config) =~ "registry_repo:"
     end
   end
 
-  describe "run/3 registry checkout resolution" do
-    test "uses an existing checkout without cloning" do
-      checkout = make_registry_checkout("init_existing")
+  describe "run/3 legacy local mode (--registry-dir)" do
+    test "writes registry_dir instead of registry_repo" do
+      checkout = make_registry_checkout("init_local")
       config = tmp_path("init_config") <> ".yml"
       on_exit(fn -> File.rm(config) end)
 
-      gh = fn
-        ["repo", "clone" | _] -> flunk("must not clone when the checkout already exists")
-        args -> gh_ok_stub().(args)
-      end
+      opts = [config: config, registry_dir: Path.join(checkout, "data")]
 
-      opts = [config: config, clone_to: checkout]
+      assert {:ok, _} = Init.run([], opts, %{output: output_stub(), gh: gh_ok_stub()})
 
-      assert {:ok, _} = Init.run([], opts, %{output: output_stub(), gh: gh})
-      assert File.read!(config) =~ "registry_dir: #{Path.join(checkout, "data")}"
+      content = File.read!(config)
+      assert content =~ "registry_dir: #{Path.join(checkout, "data")}"
+      refute content =~ "registry_repo:"
     end
 
-    test "clones the registry repo when no checkout exists" do
-      clone_to = tmp_path("init_clone")
+    test "fails when the given registry_dir does not exist" do
       config = tmp_path("init_config") <> ".yml"
-      on_exit(fn -> File.rm_rf!(clone_to) end)
-      on_exit(fn -> File.rm(config) end)
 
-      gh = fn
-        ["repo", "clone", "smkwlab/thesis-student-registry", ^clone_to] ->
-          File.mkdir_p!(Path.join(clone_to, "data"))
-          File.write!(Path.join(clone_to, "data/registry.json"), "{}")
-          {:ok, ""}
+      opts = [config: config, registry_dir: "/nonexistent/registry/data"]
 
-        args ->
-          gh_ok_stub().(args)
-      end
-
-      opts = [config: config, clone_to: clone_to]
-
-      assert {:ok, _} = Init.run([], opts, %{output: output_stub(), gh: gh})
-      assert File.read!(config) =~ "registry_dir: #{Path.join(clone_to, "data")}"
-    end
-
-    test "fails when the cloned repository has no data directory" do
-      clone_to = tmp_path("init_no_data")
-      config = tmp_path("init_config") <> ".yml"
-      on_exit(fn -> File.rm_rf!(clone_to) end)
-
-      gh = fn
-        ["repo", "clone", _repo, path] ->
-          # data/ を持たないリポジトリ（空 repo や構造違い）を clone した状況
-          File.mkdir_p!(path)
-          {:ok, ""}
-
-        args ->
-          gh_ok_stub().(args)
-      end
-
-      opts = [config: config, clone_to: clone_to]
-
-      assert {:error, :registry_data_missing} =
-               Init.run([], opts, %{output: output_stub(), gh: gh})
+      assert {:error, :registry_dir_not_found} =
+               Init.run([], opts, %{output: output_stub(), gh: gh_ok_stub()})
 
       refute File.exists?(config)
-      assert Enum.any?(collect_output(:error), &(&1 =~ "data/"))
-    end
-
-    test "points to registry-manager init when the repo is unavailable" do
-      clone_to = tmp_path("init_missing")
-      config = tmp_path("init_config") <> ".yml"
-
-      gh = fn
-        ["repo", "clone" | _] -> {:error, "GraphQL: Could not resolve to a Repository"}
-        args -> gh_ok_stub().(args)
-      end
-
-      opts = [config: config, clone_to: clone_to]
-
-      assert {:error, :registry_repo_unavailable} =
-               Init.run([], opts, %{output: output_stub(), gh: gh})
-
-      refute File.exists?(config)
-      assert Enum.any?(collect_output(:error), &(&1 =~ "registry-manager"))
     end
   end
 
   describe "run/3 --test sandbox mode" do
-    test "defaults to the test registry and a separate cache dir" do
-      clone_to = tmp_path("init_test_clone")
+    test "uses the test registry repo and a separate cache dir" do
       config = tmp_path("init_config") <> ".yml"
-      on_exit(fn -> File.rm_rf!(clone_to) end)
       on_exit(fn -> File.rm(config) end)
 
-      gh = fn
-        ["repo", "clone", "smkwlab/thesis-student-registry-test", ^clone_to] ->
-          File.mkdir_p!(Path.join(clone_to, "data"))
-          File.write!(Path.join(clone_to, "data/registry.json"), "{}")
-          {:ok, ""}
+      opts = [config: config, test: true]
 
-        args ->
-          gh_ok_stub().(args)
-      end
-
-      opts = [config: config, clone_to: clone_to, test: true]
-
-      assert {:ok, _} = Init.run([], opts, %{output: output_stub(), gh: gh})
+      assert {:ok, _} = Init.run([], opts, %{output: output_stub(), gh: gh_ok_stub()})
 
       content = File.read!(config)
+      assert content =~ "registry_repo: smkwlab/thesis-student-registry-test"
       assert content =~ "cache_dir: ~/.cache/thesis-monitor-test"
     end
   end
 
   describe "run/3 doctor checks" do
+    test "verifies registry access via the contents API" do
+      config = tmp_path("init_config") <> ".yml"
+      on_exit(fn -> File.rm(config) end)
+      parent = self()
+
+      gh = fn
+        ["api", "repos/smkwlab/thesis-student-registry/contents/data/registry.json" | _] ->
+          send(parent, :registry_api_checked)
+          {:ok, "{}"}
+
+        args ->
+          gh_ok_stub().(args)
+      end
+
+      assert {:ok, _} = Init.run([], [config: config], %{output: output_stub(), gh: gh})
+      assert_received :registry_api_checked
+      assert Enum.any?(collect_output(:success), &(&1 =~ "registry"))
+    end
+
+    test "warns with a legacy note when only repositories.json exists" do
+      config = tmp_path("init_config") <> ".yml"
+      on_exit(fn -> File.rm(config) end)
+
+      gh = fn
+        ["api", "repos/" <> rest | _] ->
+          cond do
+            String.ends_with?(rest, "data/registry.json") -> {:error, "HTTP 404"}
+            String.ends_with?(rest, "data/repositories.json") -> {:ok, "{}"}
+            true -> {:ok, "{}"}
+          end
+
+        args ->
+          gh_ok_stub().(args)
+      end
+
+      assert {:ok, _} = Init.run([], [config: config], %{output: output_stub(), gh: gh})
+      assert Enum.any?(collect_output(:warn), &(&1 =~ "repositories.json"))
+    end
+
+    test "points to registry-manager init when the registry is unreachable" do
+      config = tmp_path("init_config") <> ".yml"
+      on_exit(fn -> File.rm(config) end)
+
+      gh = fn
+        ["api", "repos/" <> rest | _] ->
+          if String.contains?(rest, "/contents/"),
+            do: {:error, "HTTP 404"},
+            else: {:ok, "{}"}
+
+        args ->
+          gh_ok_stub().(args)
+      end
+
+      assert {:ok, _} = Init.run([], [config: config], %{output: output_stub(), gh: gh})
+      assert Enum.any?(collect_output(:warn), &(&1 =~ "registry-manager"))
+    end
+
     test "reports failing gh auth with a remedy" do
-      checkout = make_registry_checkout("init_doctor")
       config = tmp_path("init_config") <> ".yml"
       on_exit(fn -> File.rm(config) end)
 
@@ -211,13 +231,11 @@ defmodule ThesisMonitor.Commands.InitTest do
         args -> gh_ok_stub().(args)
       end
 
-      opts = [config: config, registry_dir: Path.join(checkout, "data")]
-
-      assert {:ok, _} = Init.run([], opts, %{output: output_stub(), gh: gh})
+      assert {:ok, _} = Init.run([], [config: config], %{output: output_stub(), gh: gh})
       assert Enum.any?(collect_output(:warn), &(&1 =~ "gh auth login"))
     end
 
-    test "warns when the registry file is missing from registry_dir" do
+    test "warns when the registry file is missing from registry_dir (local mode)" do
       dir = tmp_path("init_empty_dir")
       File.mkdir_p!(dir)
       on_exit(fn -> File.rm_rf!(dir) end)

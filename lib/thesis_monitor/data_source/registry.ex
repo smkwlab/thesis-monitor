@@ -41,7 +41,10 @@ defmodule ThesisMonitor.DataSource.Registry do
   @doc """
   レジストリ（registry.json）から学生情報を取得
   """
-  def get_registry_students(config_fn \\ &Config.get/1, fetch_fn \\ &GitHubAPI.get_file_contents/2) do
+  def get_registry_students(
+        config_fn \\ &Config.get/1,
+        fetch_fn \\ &GitHubAPI.get_file_contents/2
+      ) do
     case resolve_source(config_fn) do
       :local -> Local.get_registry_students(config_fn)
       {:api, repo} -> fetch_registry(repo, config_fn, fetch_fn)
@@ -101,6 +104,7 @@ defmodule ThesisMonitor.DataSource.Registry do
     Cache.get_or_fetch("#{repo}:#{path}", fn -> fetch_fn.(repo, path) end, config_fn)
   end
 
+  @spec raise_api_error(String.t(), String.t(), term()) :: no_return()
   defp raise_api_error(repo, path, :unauthorized) do
     raise RuntimeError, """
     GitHub token cannot read #{repo}/#{path} (401/403).
