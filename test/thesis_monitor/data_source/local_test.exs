@@ -223,7 +223,7 @@ defmodule ThesisMonitor.DataSource.LocalTest do
       """)
 
       mock_config = fn
-        :student_csv -> csv_file
+        :csv_path -> csv_file
         _ -> nil
       end
 
@@ -240,7 +240,7 @@ defmodule ThesisMonitor.DataSource.LocalTest do
 
     test "handles missing CSV config" do
       mock_config = fn
-        :student_csv -> nil
+        :csv_path -> nil
         _ -> nil
       end
 
@@ -262,7 +262,7 @@ defmodule ThesisMonitor.DataSource.LocalTest do
       """)
 
       mock_config = fn
-        :student_csv -> csv_file
+        :csv_path -> csv_file
         _ -> nil
       end
 

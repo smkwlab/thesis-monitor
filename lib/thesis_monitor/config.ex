@@ -8,11 +8,16 @@ defmodule ThesisMonitor.Config do
   @default_config %{
     github_token: System.get_env("GITHUB_TOKEN"),
     github_org: "smkwlab",
-    # Must be set in config file (registry データリポジトリの data/ ディレクトリ)
+    # レジストリデータリポジトリ（owner/repo、contents API で読む）。未設定時は
+    # "<github_org>/thesis-student-registry" 規約を導出する（DataSource.Registry）
+    registry_repo: nil,
+    # legacy: ローカル checkout の data/ ディレクトリ（1 世代、registry_repo へ移行推奨）
     registry_dir: nil,
     cache_dir: "~/.cache/thesis-monitor",
     # 30分
     cache_ttl: 1800,
+    # 学生名簿 CSV（任意）。ローカル管理方針のためリポジトリ・レジストリには置かない
+    csv_path: nil,
     max_concurrency: 10,
     timeout: 10_000
   }
@@ -54,6 +59,7 @@ defmodule ThesisMonitor.Config do
     case {key, value} do
       {:registry_dir, path} when is_binary(path) -> Path.expand(path)
       {:cache_dir, path} when is_binary(path) -> Path.expand(path)
+      {:csv_path, path} when is_binary(path) -> Path.expand(path)
       _ -> value
     end
   rescue
@@ -85,30 +91,69 @@ defmodule ThesisMonitor.Config do
     end
   end
 
-  # 旧キー data_dir を registry_dir へ移行（1 世代の後方互換、issue #7）
-  # 移行後は data_dir を残さない（get_all や get(:data_dir) から古い値が見えないように）
+  # 旧キーの 1 世代後方互換:
+  #   data_dir → registry_dir（issue #7）、student_csv → csv_path（issue #14）は
+  #   同じ意味のまま改名なので値を新キーへ昇格する。
+  #   registry_dir → registry_repo（issue #14）は値の意味が変わる（ローカルパス vs
+  #   owner/repo）ため自動昇格できず、警告して手動移行を促すだけにする。
+  # 移行後は旧キーを残さない（get_all や get(:data_dir) から古い値が見えないように）
   defp migrate_legacy_keys(config, path) do
-    case config do
-      %{registry_dir: nil, data_dir: legacy} when is_binary(legacy) ->
+    config
+    |> migrate_renamed_key(:data_dir, :registry_dir, path)
+    |> migrate_renamed_key(:student_csv, :csv_path, path)
+    |> warn_deprecated_registry_dir(path)
+  end
+
+  defp migrate_renamed_key(config, old_key, new_key, path) do
+    cond do
+      not Map.has_key?(config, old_key) ->
+        config
+
+      is_binary(Map.get(config, new_key)) ->
         IO.puts(
           :stderr,
-          "warning: config key \"data_dir\" is deprecated, rename it to \"registry_dir\" (#{path})"
+          "warning: config key \"#{old_key}\" is ignored because \"#{new_key}\" is set (#{path})"
+        )
+
+        Map.delete(config, old_key)
+
+      is_binary(Map.get(config, old_key)) ->
+        IO.puts(
+          :stderr,
+          "warning: config key \"#{old_key}\" is deprecated, rename it to \"#{new_key}\" (#{path})"
         )
 
         config
-        |> Map.put(:registry_dir, legacy)
-        |> Map.delete(:data_dir)
+        |> Map.put(new_key, Map.get(config, old_key))
+        |> Map.delete(old_key)
 
-      %{registry_dir: existing, data_dir: _legacy} when is_binary(existing) ->
+      true ->
+        Map.delete(config, old_key)
+    end
+  end
+
+  defp warn_deprecated_registry_dir(config, path) do
+    case config do
+      %{registry_repo: repo, registry_dir: dir}
+      when is_binary(repo) and repo != "" and is_binary(dir) ->
         IO.puts(
           :stderr,
-          "warning: config key \"data_dir\" is ignored because \"registry_dir\" is set (#{path})"
+          "warning: config key \"registry_dir\" is ignored because \"registry_repo\" is set (#{path})"
         )
 
-        Map.delete(config, :data_dir)
+        Map.put(config, :registry_dir, nil)
+
+      %{registry_dir: dir} when is_binary(dir) ->
+        IO.puts(
+          :stderr,
+          "warning: config key \"registry_dir\" (local checkout) is deprecated, " <>
+            "switch to \"registry_repo\" — run `thesis-monitor init --force` (#{path})"
+        )
+
+        config
 
       _ ->
-        Map.delete(config, :data_dir)
+        config
     end
   end
 end

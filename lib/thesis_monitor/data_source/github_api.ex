@@ -217,6 +217,41 @@ defmodule ThesisMonitor.DataSource.GitHubAPI do
     }
   end
 
+  @doc """
+  contents API でファイルを取得し、デコード済みのテキストを返す
+
+  レジストリは private リポジトリのため、404（ファイル不在）と 401/403
+  （トークンの権限不足）を区別して返す。権限不足を「存在しない」と
+  誤解釈すると学生ゼロと沈黙するため、呼び出し側で必ず区別すること。
+  """
+  def get_file_contents(repo_full_name, path) do
+    url = "#{@base_url}/repos/#{repo_full_name}/contents/#{path}"
+
+    case make_request(url) do
+      {:ok, body} -> decode_contents_response(body)
+      {:error, 404} -> {:error, :not_found}
+      {:error, status} when status in [401, 403] -> {:error, :unauthorized}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  @doc false
+  # contents API の content は base64（60 桁ごとに改行入り）で返る
+  def decode_contents_response(%{"content" => content, "encoding" => "base64"})
+      when is_binary(content) do
+    decoded =
+      content
+      |> String.replace(["\n", "\r"], "")
+      |> Base.decode64()
+
+    case decoded do
+      {:ok, text} -> {:ok, text}
+      :error -> {:error, :invalid_content}
+    end
+  end
+
+  def decode_contents_response(_body), do: {:error, :invalid_content}
+
   defp make_request(url) do
     headers = [
       {"Accept", "application/vnd.github.v3+json"},

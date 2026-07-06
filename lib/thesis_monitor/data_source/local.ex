@@ -42,7 +42,7 @@ defmodule ThesisMonitor.DataSource.Local do
   end
 
   defp get_student_csv_path(config_fn) do
-    case config_fn.(:student_csv) do
+    case config_fn.(:csv_path) do
       nil ->
         nil
 
@@ -57,13 +57,7 @@ defmodule ThesisMonitor.DataSource.Local do
   def get_students(config_fn \\ &Config.get/1) do
     case File.read(protection_status_path(config_fn)) do
       {:ok, content} ->
-        students =
-          content
-          |> String.split("\n")
-          |> Enum.map(&parse_student_line/1)
-          |> Enum.reject(&is_nil/1)
-
-        {:ok, students}
+        {:ok, parse_protection_content(content)}
 
       {:error, :enoent} ->
         {:ok, []}
@@ -73,30 +67,45 @@ defmodule ThesisMonitor.DataSource.Local do
     end
   end
 
+  @doc false
+  # protection-status ファイルの本文をパースする（API 経路からも使う）
+  def parse_protection_content(content) do
+    content
+    |> String.split("\n")
+    |> Enum.map(&parse_student_line/1)
+    |> Enum.reject(&is_nil/1)
+  end
+
   @doc """
   レジストリから学生情報を取得
   """
   def get_registry_students(config_fn \\ &Config.get/1) do
     case read_registry_file(config_fn) do
       {:ok, content} ->
-        case Jason.decode(content) do
-          {:ok, data} ->
-            students =
-              data
-              |> Enum.map(&parse_registry_entry/1)
-              |> Enum.reject(&is_nil/1)
-
-            {:ok, students}
-
-          {:error, _} ->
-            {:ok, []}
-        end
+        parse_registry_content(content)
 
       {:error, :enoent} ->
         {:ok, []}
 
       {:error, reason} ->
         {:error, reason}
+    end
+  end
+
+  @doc false
+  # registry.json の本文をパースする（API 経路からも使う）
+  def parse_registry_content(content) do
+    case Jason.decode(content) do
+      {:ok, data} ->
+        students =
+          data
+          |> Enum.map(&parse_registry_entry/1)
+          |> Enum.reject(&is_nil/1)
+
+        {:ok, students}
+
+      {:error, _} ->
+        {:ok, []}
     end
   end
 

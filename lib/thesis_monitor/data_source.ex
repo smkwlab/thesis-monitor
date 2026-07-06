@@ -7,6 +7,7 @@ defmodule ThesisMonitor.DataSource do
   alias ThesisMonitor.{
     DataSource.GitHubAPI,
     DataSource.Local,
+    DataSource.Registry,
     Student
   }
 
@@ -14,8 +15,8 @@ defmodule ThesisMonitor.DataSource do
   全学生のリストを取得
   """
   def get_all_students do
-    with {:ok, local_students} <- Local.get_students(),
-         {:ok, registry_students} <- Local.get_registry_students(),
+    with {:ok, local_students} <- Registry.get_students(),
+         {:ok, registry_students} <- Registry.get_registry_students(),
          {:ok, names_map} <- Local.get_student_names() do
       students =
         (local_students ++ registry_students)
@@ -32,7 +33,7 @@ defmodule ThesisMonitor.DataSource do
 
   # フォールバック: レジストリのみからデータを取得
   defp registry_only_students do
-    case Local.get_registry_students() do
+    case Registry.get_registry_students() do
       {:ok, students} -> {:ok, add_names_if_available(students)}
       _error -> {:ok, []}
     end

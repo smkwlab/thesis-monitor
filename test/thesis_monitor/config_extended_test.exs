@@ -118,6 +118,131 @@ defmodule ThesisMonitor.ConfigExtendedTest do
     end
   end
 
+  describe "csv_path key (issue #14)" do
+    test "loads csv_path with tilde expansion" do
+      path =
+        write_tmp_config("""
+        csv_path: ~/test_students.csv
+        """)
+
+      {:ok, _pid} = Config.load(path)
+
+      assert Config.get(:csv_path) == Path.expand("~/test_students.csv")
+    end
+
+    test "accepts legacy student_csv key as fallback for csv_path" do
+      path =
+        write_tmp_config("""
+        student_csv: /tmp/test_students.csv
+        """)
+
+      {:ok, _pid} = Config.load(path)
+
+      assert Config.get(:csv_path) == "/tmp/test_students.csv"
+      refute Map.has_key?(Config.get_all(), :student_csv)
+    end
+
+    test "csv_path wins when both keys are present" do
+      path =
+        write_tmp_config("""
+        csv_path: /tmp/test_new.csv
+        student_csv: /tmp/test_old.csv
+        """)
+
+      {:ok, _pid} = Config.load(path)
+
+      assert Config.get(:csv_path) == "/tmp/test_new.csv"
+      refute Map.has_key?(Config.get_all(), :student_csv)
+    end
+
+    test "warns with a deprecation message when only student_csv is set" do
+      path =
+        write_tmp_config("""
+        student_csv: /tmp/test_students.csv
+        """)
+
+      stderr =
+        ExUnit.CaptureIO.capture_io(:stderr, fn ->
+          {:ok, _pid} = Config.load(path)
+        end)
+
+      assert stderr =~ "deprecated"
+      assert stderr =~ "csv_path"
+    end
+
+    test "csv_path defaults to nil" do
+      {:ok, _pid} = Config.load(nil)
+
+      assert Config.get(:csv_path) == nil
+    end
+  end
+
+  describe "registry_repo key (issue #14)" do
+    test "loads registry_repo from config" do
+      path =
+        write_tmp_config("""
+        registry_repo: myorg/thesis-student-registry
+        """)
+
+      {:ok, _pid} = Config.load(path)
+
+      assert Config.get(:registry_repo) == "myorg/thesis-student-registry"
+    end
+
+    test "registry_repo defaults to nil" do
+      {:ok, _pid} = Config.load(nil)
+
+      assert Config.get(:registry_repo) == nil
+    end
+
+    test "warns that registry_dir is deprecated when set without registry_repo" do
+      path =
+        write_tmp_config("""
+        registry_dir: /tmp/test_registry/data
+        """)
+
+      stderr =
+        ExUnit.CaptureIO.capture_io(:stderr, fn ->
+          {:ok, _pid} = Config.load(path)
+        end)
+
+      assert stderr =~ "registry_dir"
+      assert stderr =~ "deprecated"
+      assert stderr =~ "registry_repo"
+    end
+
+    test "registry_dir is ignored with a warning when registry_repo is also set" do
+      path =
+        write_tmp_config("""
+        registry_repo: myorg/thesis-student-registry
+        registry_dir: /tmp/test_registry/data
+        """)
+
+      stderr =
+        ExUnit.CaptureIO.capture_io(:stderr, fn ->
+          {:ok, _pid} = Config.load(path)
+        end)
+
+      assert stderr =~ "registry_dir"
+      assert stderr =~ "ignored"
+      assert Config.get(:registry_dir) == nil
+      assert Config.get(:registry_repo) == "myorg/thesis-student-registry"
+    end
+
+    test "registry_dir alone keeps working (one-generation legacy)" do
+      path =
+        write_tmp_config("""
+        registry_dir: /tmp/test_registry/data
+        """)
+
+      ExUnit.CaptureIO.capture_io(:stderr, fn ->
+        {:ok, _pid} = Config.load(path)
+      end)
+
+      assert Config.get(:registry_dir) == "/tmp/test_registry/data"
+    end
+  end
+
   describe "load configuration from different sources" do
     test "loads from explicit config path" do
       config_content = """
