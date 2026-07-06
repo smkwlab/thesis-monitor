@@ -11,10 +11,6 @@ github_org: "your-org"
 # When unset, "<github_org>/thesis-student-registry" is used by convention.
 registry_repo: "your-org/thesis-student-registry"
 
-# Legacy alternative: read a local checkout's data/ directory instead of the API.
-# Deprecated (one generation); prefer registry_repo above.
-# registry_dir: "/path/to/your-student-registry/data"
-
 # Student roster CSV for name resolution (optional).
 # When unset, "~/.config/<github_org>/students.csv" is used by convention
 # if it exists (registry-manager reads the same conventional path).

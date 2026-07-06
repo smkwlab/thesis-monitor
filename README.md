@@ -134,8 +134,8 @@ timeout: 10000          # APIタイムアウト（ミリ秒）
 ```
 
 registry-manager と設定語彙を共有しています（`github_org` / `registry_repo` /
-`csv_path`）。旧キー `registry_dir`（ローカル checkout 読み）・`data_dir`・
-`student_csv` も当面は警告付きで受け付けます。
+`csv_path`）。旧キー（`registry_dir` / `data_dir` / `student_csv`）の互換は
+ありません（公開前に後方互換を全廃）。
 
 ### GitHub 認証
 
@@ -150,11 +150,9 @@ export GITHUB_TOKEN=ghp_xxxxxxxxxxxxx
 ### データソース
 
 `registry_repo` には学生リポジトリレジストリ（**private リポジトリ**で管理される
-`data/registry.json`。旧名 `repositories.json` も移行期間中は自動で読み込む）を
-`owner/repo` 形式で指定します。private リポジトリのため、使用するトークンに
-当該リポジトリの Contents: Read 権限が必要です。旧キー `registry_dir`
-（ローカルチェックアウト読み）も当面は警告付きで受け付けますが、
-`registry_repo` への移行を推奨します。
+`data/registry.json`）を `owner/repo` 形式で指定します（未設定時は
+`<github_org>/thesis-student-registry` を規約として使用）。private リポジトリの
+ため、使用するトークンに当該リポジトリの Contents: Read 権限が必要です。
 
 `repository_type` の語彙は `sotsuron` / `master` / `wr` / `ise` / `latex` / `other`
 です（`latex` = latex-template 派生の研究会原稿等で、卒論・修論と同様に draft

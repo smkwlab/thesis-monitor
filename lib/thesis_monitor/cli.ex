@@ -40,7 +40,6 @@ defmodule ThesisMonitor.CLI do
           test: :boolean,
           org: :string,
           registry_repo: :string,
-          registry_dir: :string,
           force: :boolean
         ],
         aliases: [
@@ -140,8 +139,6 @@ defmodule ThesisMonitor.CLI do
       --org               GitHub organization（デフォルト: smkwlab）
       --registry-repo     レジストリデータリポジトリ（owner/repo 形式。
                           デフォルト: <org>/thesis-student-registry）
-      --registry-dir      ローカル checkout の data/ を読む legacy 設定を生成
-                          （通常は不要。既定は GitHub API 読み）
       --force             既存の設定ファイルを上書き
 
     Examples:
@@ -170,7 +167,6 @@ defmodule ThesisMonitor.CLI do
                      <github_org>/thesis-student-registry を規約として使用
       csv_path:      学生名簿 CSV のパス（任意。ローカル管理。未設定時は
                      ~/.config/<github_org>/students.csv を規約として参照）
-      （旧キー registry_dir / data_dir / student_csv も当面は警告付きで受け付ける）
     """)
   end
 

@@ -1,45 +1,12 @@
 defmodule ThesisMonitor.DataSource.Local do
   @moduledoc """
-  ローカルファイルからのデータ読み込み
+  ローカルの名簿 CSV 読み込みと、レジストリ/protection-status 本文のパース
+
+  レジストリ本体の取得は DataSource.Registry（contents API）が担当する。
+  名簿 CSV は個人情報を含むためローカル管理（リポジトリ・レジストリに置かない）。
   """
 
   alias ThesisMonitor.{Config, Student}
-
-  @registry_file "registry.json"
-  # 旧ファイル名（repositories.json → registry.json 改名の移行期間中のみ、issue #7）
-  @legacy_registry_file "repositories.json"
-
-  defp get_registry_dir(config_fn) do
-    case config_fn.(:registry_dir) do
-      nil ->
-        raise RuntimeError, """
-        Registry directory not configured. Please run `thesis-monitor init` or create ~/.config/thesis-monitor/config.yml with:
-
-        registry_dir: "/path/to/thesis-student-registry/data"
-
-        See config/thesis-monitor.yml.example for full configuration options.
-        """
-
-      path when is_binary(path) ->
-        Path.expand(path)
-    end
-  end
-
-  defp protection_status_path(config_fn) do
-    Path.join(get_registry_dir(config_fn), "protection-status/completed-protection.txt")
-  end
-
-  # registry.json を優先して読み、無ければ旧名 repositories.json を読む
-  # （exists? チェックではなく read の結果で分岐し、TOCTOU を避ける）
-  defp read_registry_file(config_fn) do
-    dir = get_registry_dir(config_fn)
-
-    case File.read(Path.join(dir, @registry_file)) do
-      {:ok, content} -> {:ok, content}
-      {:error, :enoent} -> File.read(Path.join(dir, @legacy_registry_file))
-      error -> error
-    end
-  end
 
   defp get_student_csv_path(config_fn) do
     case config_fn.(:csv_path) do
@@ -51,24 +18,8 @@ defmodule ThesisMonitor.DataSource.Local do
     end
   end
 
-  @doc """
-  保護設定完了済み学生のリストを取得
-  """
-  def get_students(config_fn \\ &Config.get/1) do
-    case File.read(protection_status_path(config_fn)) do
-      {:ok, content} ->
-        {:ok, parse_protection_content(content)}
-
-      {:error, :enoent} ->
-        {:ok, []}
-
-      {:error, reason} ->
-        {:error, reason}
-    end
-  end
-
   @doc false
-  # protection-status ファイルの本文をパースする（API 経路からも使う）
+  # protection-status ファイルの本文をパースする（Registry の API 経路から使う）
   def parse_protection_content(content) do
     content
     |> String.split("\n")
@@ -76,47 +27,12 @@ defmodule ThesisMonitor.DataSource.Local do
     |> Enum.reject(&is_nil/1)
   end
 
-  @doc """
-  レジストリから学生情報を取得
-  """
-  def get_registry_students(config_fn \\ &Config.get/1) do
-    case read_registry_file(config_fn) do
-      {:ok, content} ->
-        parse_registry_content(content)
-
-      {:error, :enoent} ->
-        {:ok, []}
-
-      {:error, reason} ->
-        {:error, reason}
-    end
-  end
-
   @doc false
-  # デコード済みレジストリデータを学生リストにする（API 経路からも使う）
+  # デコード済みレジストリデータを学生リストにする（Registry の API 経路から使う）
   def parse_registry_data(data) do
     data
     |> Enum.map(&parse_registry_entry/1)
     |> Enum.reject(&is_nil/1)
-  end
-
-  @doc false
-  # registry.json の本文をパースする。ローカル読みは従来どおり
-  # 不正 JSON を空リストに畳む（API 経路は Registry 側で strict に扱う）が、
-  # 「学生ゼロ」の原因が分かるよう警告だけは出す
-  def parse_registry_content(content) do
-    case Jason.decode(content) do
-      {:ok, data} ->
-        {:ok, parse_registry_data(data)}
-
-      {:error, _} ->
-        IO.puts(
-          :stderr,
-          "warning: registry file contains invalid JSON; treating it as empty"
-        )
-
-        {:ok, []}
-    end
   end
 
   defp parse_student_line(line) do

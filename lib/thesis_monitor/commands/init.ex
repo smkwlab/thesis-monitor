@@ -3,8 +3,8 @@ defmodule ThesisMonitor.Commands.Init do
   セットアップコマンド
 
   設定ファイル（~/.config/thesis-monitor/config.yml）の生成と doctor 検証を行う。
-  レジストリは GitHub contents API で読むため clone は不要（issue #14）。
-  `--registry-dir` 指定時のみ legacy のローカル checkout 読みの設定を生成する。
+  レジストリは GitHub contents API で読む（clone 不要、issue #14。
+  ローカル checkout 読みの互換モードは持たない — issue #20）。
 
   データリポジトリの新規作成はスコープ外（registry-manager の init を案内）。
   """
@@ -14,10 +14,7 @@ defmodule ThesisMonitor.Commands.Init do
   @default_org "smkwlab"
   @prod_repo_name "thesis-student-registry"
   @test_repo_name "thesis-student-registry-test"
-  @registry_file "registry.json"
-  @legacy_registry_file "repositories.json"
   @registry_file_path "data/registry.json"
-  @legacy_registry_file_path "data/repositories.json"
 
   def run(_args, opts, deps \\ %{}) do
     output = deps[:output] || Output
@@ -25,8 +22,9 @@ defmodule ThesisMonitor.Commands.Init do
 
     params = resolve_params(opts)
 
+    location = {:api, params.registry_repo}
+
     with :ok <- check_config_writable(params, output),
-         {:ok, location} <- resolve_registry_location(params, output),
          :ok <- write_config(params, location, output) do
       run_doctor(params, location, gh, output)
       show_next_steps(params, output)
@@ -45,7 +43,6 @@ defmodule ThesisMonitor.Commands.Init do
       test_mode: test_mode,
       org: org,
       registry_repo: opts[:registry_repo] || "#{org}/#{repo_name}",
-      registry_dir: opts[:registry_dir],
       cache_dir:
         if(test_mode, do: "~/.cache/thesis-monitor-test", else: "~/.cache/thesis-monitor"),
       config_path: opts[:config] || default_config_path(test_mode),
@@ -56,21 +53,6 @@ defmodule ThesisMonitor.Commands.Init do
   # --test サンドボックスは意図的に cwd ローカル（本番 config と混ざらない）
   defp default_config_path(true), do: "./thesis-monitor-test.yml"
   defp default_config_path(false), do: ThesisMonitor.Config.default_config_path()
-
-  # --- レジストリ取得元の解決 ---
-
-  # 既定は contents API 読み。--registry-dir 指定時のみ legacy のローカル読み
-  # （生成する config は実行時の cwd に依存しないよう絶対パスで書く）
-  defp resolve_registry_location(%{registry_dir: dir}, output) when is_binary(dir) do
-    if File.dir?(dir) do
-      {:ok, {:local, Path.expand(dir)}}
-    else
-      call(output, :error, "registry_dir not found: #{dir}")
-      {:error, :registry_dir_not_found}
-    end
-  end
-
-  defp resolve_registry_location(params, _output), do: {:ok, {:api, params.registry_repo}}
 
   # --- 設定ファイル ---
 
@@ -137,13 +119,6 @@ defmodule ThesisMonitor.Commands.Init do
     end
   end
 
-  defp registry_yaml({:local, dir}, _params) do
-    """
-    # legacy: レジストリデータリポジトリのローカル checkout 内の data/ ディレクトリ
-    registry_dir: #{dir}
-    """
-  end
-
   # --- doctor ---
 
   defp run_doctor(params, location, gh, output) do
@@ -169,46 +144,11 @@ defmodule ThesisMonitor.Commands.Init do
     end
   end
 
-  # API モード: contents API でレジストリファイルの疎通を確認する
+  # contents API でレジストリファイルの疎通を確認する
   defp check_registry({:api, repo}, gh, output) do
     case gh.(["api", "repos/#{repo}/contents/#{@registry_file_path}"]) do
       {:ok, _} ->
         call(output, :success, "✓ registry access (#{repo}/#{@registry_file_path})")
-
-      {:error, _} ->
-        check_legacy_registry(repo, gh, output)
-    end
-  end
-
-  # legacy ローカルモード: registry_dir 配下のファイル存在を確認する
-  defp check_registry({:local, registry_dir}, _gh, output) do
-    new_path = Path.join(registry_dir, @registry_file)
-    legacy_path = Path.join(registry_dir, @legacy_registry_file)
-
-    cond do
-      File.exists?(new_path) ->
-        call(output, :success, "✓ registry file (#{@registry_file})")
-
-      File.exists?(legacy_path) ->
-        call(output, :warn, "✗ registry file — 旧名 #{@legacy_registry_file} のみ存在します（読み取りは可能）")
-
-      true ->
-        call(
-          output,
-          :warn,
-          "✗ registry file — #{@registry_file} が #{registry_dir} に見つかりません"
-        )
-    end
-  end
-
-  defp check_legacy_registry(repo, gh, output) do
-    case gh.(["api", "repos/#{repo}/contents/#{@legacy_registry_file_path}"]) do
-      {:ok, _} ->
-        call(
-          output,
-          :warn,
-          "✗ registry access — 旧名 #{@legacy_registry_file_path} のみ存在します（読み取りは可能）"
-        )
 
       {:error, _} ->
         call(

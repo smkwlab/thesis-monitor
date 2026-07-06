@@ -27,95 +27,16 @@ defmodule ThesisMonitor.ConfigExtendedTest do
     :ok
   end
 
-  describe "registry_dir key (issue #7)" do
-    defp write_tmp_config(content) do
-      path =
-        Path.join(
-          System.tmp_dir(),
-          "thesis-monitor-config-test-#{System.unique_integer([:positive])}.yml"
-        )
+  defp write_tmp_config(content) do
+    path =
+      Path.join(
+        System.tmp_dir(),
+        "thesis-monitor-config-test-#{System.unique_integer([:positive])}.yml"
+      )
 
-      File.write!(path, content)
-      on_exit(fn -> File.rm(path) end)
-      path
-    end
-
-    test "loads registry_dir with tilde expansion" do
-      path =
-        write_tmp_config("""
-        registry_dir: ~/test_registry_dir
-        """)
-
-      {:ok, _pid} = Config.load(path)
-
-      assert Config.get(:registry_dir) == Path.expand("~/test_registry_dir")
-    end
-
-    test "accepts legacy data_dir key as fallback for registry_dir" do
-      path =
-        write_tmp_config("""
-        data_dir: /tmp/test_legacy_data_dir
-        """)
-
-      {:ok, _pid} = Config.load(path)
-
-      assert Config.get(:registry_dir) == "/tmp/test_legacy_data_dir"
-    end
-
-    test "removes the legacy data_dir key from the config map after migration" do
-      path =
-        write_tmp_config("""
-        data_dir: /tmp/test_legacy_data_dir
-        """)
-
-      {:ok, _pid} = Config.load(path)
-
-      refute Map.has_key?(Config.get_all(), :data_dir)
-    end
-
-    test "registry_dir wins when both keys are present" do
-      path =
-        write_tmp_config("""
-        registry_dir: /tmp/test_new_wins
-        data_dir: /tmp/test_old_loses
-        """)
-
-      {:ok, _pid} = Config.load(path)
-
-      assert Config.get(:registry_dir) == "/tmp/test_new_wins"
-      refute Map.has_key?(Config.get_all(), :data_dir)
-    end
-
-    test "warns with a deprecation message when only data_dir is set" do
-      path =
-        write_tmp_config("""
-        data_dir: /tmp/test_legacy_data_dir
-        """)
-
-      stderr =
-        ExUnit.CaptureIO.capture_io(:stderr, fn ->
-          {:ok, _pid} = Config.load(path)
-        end)
-
-      assert stderr =~ "deprecated"
-      assert stderr =~ "registry_dir"
-    end
-
-    test "warns that data_dir is ignored when registry_dir is also set" do
-      path =
-        write_tmp_config("""
-        registry_dir: /tmp/test_new_wins
-        data_dir: /tmp/test_old_loses
-        """)
-
-      stderr =
-        ExUnit.CaptureIO.capture_io(:stderr, fn ->
-          {:ok, _pid} = Config.load(path)
-        end)
-
-      assert stderr =~ "data_dir"
-      assert stderr =~ "ignored"
-    end
+    File.write!(path, content)
+    on_exit(fn -> File.rm(path) end)
+    path
   end
 
   describe "csv_path key (issue #14)" do
@@ -128,46 +49,6 @@ defmodule ThesisMonitor.ConfigExtendedTest do
       {:ok, _pid} = Config.load(path)
 
       assert Config.get(:csv_path) == Path.expand("~/test_students.csv")
-    end
-
-    test "accepts legacy student_csv key as fallback for csv_path" do
-      path =
-        write_tmp_config("""
-        student_csv: /tmp/test_students.csv
-        """)
-
-      {:ok, _pid} = Config.load(path)
-
-      assert Config.get(:csv_path) == "/tmp/test_students.csv"
-      refute Map.has_key?(Config.get_all(), :student_csv)
-    end
-
-    test "csv_path wins when both keys are present" do
-      path =
-        write_tmp_config("""
-        csv_path: /tmp/test_new.csv
-        student_csv: /tmp/test_old.csv
-        """)
-
-      {:ok, _pid} = Config.load(path)
-
-      assert Config.get(:csv_path) == "/tmp/test_new.csv"
-      refute Map.has_key?(Config.get_all(), :student_csv)
-    end
-
-    test "warns with a deprecation message when only student_csv is set" do
-      path =
-        write_tmp_config("""
-        student_csv: /tmp/test_students.csv
-        """)
-
-      stderr =
-        ExUnit.CaptureIO.capture_io(:stderr, fn ->
-          {:ok, _pid} = Config.load(path)
-        end)
-
-      assert stderr =~ "deprecated"
-      assert stderr =~ "csv_path"
     end
 
     test "csv_path defaults to nil when no CSV is configured" do
@@ -289,53 +170,6 @@ defmodule ThesisMonitor.ConfigExtendedTest do
 
       assert Config.get(:registry_repo) == nil
     end
-
-    test "warns that registry_dir is deprecated when set without registry_repo" do
-      path =
-        write_tmp_config("""
-        registry_dir: /tmp/test_registry/data
-        """)
-
-      stderr =
-        ExUnit.CaptureIO.capture_io(:stderr, fn ->
-          {:ok, _pid} = Config.load(path)
-        end)
-
-      assert stderr =~ "registry_dir"
-      assert stderr =~ "deprecated"
-      assert stderr =~ "registry_repo"
-    end
-
-    test "registry_dir is ignored with a warning when registry_repo is also set" do
-      path =
-        write_tmp_config("""
-        registry_repo: myorg/thesis-student-registry
-        registry_dir: /tmp/test_registry/data
-        """)
-
-      stderr =
-        ExUnit.CaptureIO.capture_io(:stderr, fn ->
-          {:ok, _pid} = Config.load(path)
-        end)
-
-      assert stderr =~ "registry_dir"
-      assert stderr =~ "ignored"
-      assert Config.get(:registry_dir) == nil
-      assert Config.get(:registry_repo) == "myorg/thesis-student-registry"
-    end
-
-    test "registry_dir alone keeps working (one-generation legacy)" do
-      path =
-        write_tmp_config("""
-        registry_dir: /tmp/test_registry/data
-        """)
-
-      ExUnit.CaptureIO.capture_io(:stderr, fn ->
-        {:ok, _pid} = Config.load(path)
-      end)
-
-      assert Config.get(:registry_dir) == "/tmp/test_registry/data"
-    end
   end
 
   describe "agent-less fallback (issue #14)" do
@@ -365,7 +199,6 @@ defmodule ThesisMonitor.ConfigExtendedTest do
       config_content = """
       github_token: test_token_explicit
       github_org: test_org
-      data_dir: /tmp/test_data
       max_concurrency: 15
       timeout: 20_000
       """
@@ -387,7 +220,7 @@ defmodule ThesisMonitor.ConfigExtendedTest do
 
       config_content = """
       github_token: test_token_local
-      registry_dir: ./test_data
+      registry_repo: localorg/thesis-student-registry
       """
 
       File.write!("./config/thesis-monitor.yml", config_content)
@@ -395,7 +228,7 @@ defmodule ThesisMonitor.ConfigExtendedTest do
       {:ok, _pid} = Config.load(nil)
 
       assert Config.get(:github_token) == "test_token_local"
-      assert String.ends_with?(Config.get(:registry_dir), "/test_data")
+      assert Config.get(:registry_repo) == "localorg/thesis-student-registry"
 
       File.rm!("./config/thesis-monitor.yml")
       # Don't remove config directory as it might not be empty
@@ -447,17 +280,6 @@ defmodule ThesisMonitor.ConfigExtendedTest do
     test "gets value by atom key" do
       result = Config.get(:github_org)
       assert result == "smkwlab"
-    end
-
-    test "expands tilde in registry_dir path" do
-      # Set a path with tilde
-      Agent.update(Config, fn config ->
-        Map.put(config, :registry_dir, "~/test_data")
-      end)
-
-      result = Config.get(:registry_dir)
-      refute String.contains?(result, "~")
-      assert String.ends_with?(result, "/test_data")
     end
 
     test "expands tilde in cache_dir path" do
