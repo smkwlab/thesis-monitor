@@ -25,8 +25,8 @@ defmodule ThesisMonitor.StudentTest do
       assert Student.determine_repo_name("k22jk059") == "k22jk059-sotsuron"
     end
 
-    test "determines thesis repo for gjk students" do
-      assert Student.determine_repo_name("k23gjk01") == "k23gjk01-thesis"
+    test "determines master thesis repo for gjk students" do
+      assert Student.determine_repo_name("k23gjk01") == "k23gjk01-master"
     end
 
     test "returns nil for invalid student IDs" do

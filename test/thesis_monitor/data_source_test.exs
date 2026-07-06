@@ -155,16 +155,27 @@ defmodule ThesisMonitor.DataSourceTest do
       assert result == students
     end
 
-    test "filters by thesis type" do
+    test "filters by thesis type as sotsuron plus master (issue #11)" do
       students = [
-        %Student{id: "k92rs001", repo_type: "thesis"},
+        %Student{id: "k92gjk01", repo_type: "master"},
         %Student{id: "k22rs002", repo_type: "sotsuron"},
-        %Student{id: "k22rs003", repo_type: "wr"}
+        %Student{id: "k22rs003", repo_type: "wr"},
+        %Student{id: "k22rs004", repo_type: "latex"}
       ]
 
       result = DataSource.filter_students_by_type(students, "thesis")
       assert length(result) == 2
-      assert Enum.all?(result, fn s -> s.repo_type in ["thesis", "sotsuron"] end)
+      assert Enum.all?(result, fn s -> s.repo_type in ["master", "sotsuron"] end)
+    end
+
+    test "filters latex by equality (issue #11)" do
+      students = [
+        %Student{id: "k22rs004", repo_type: "latex"},
+        %Student{id: "k22rs002", repo_type: "sotsuron"}
+      ]
+
+      result = DataSource.filter_students_by_type(students, "latex")
+      assert [%{repo_type: "latex"}] = result
     end
 
     test "filters by specific type" do
@@ -201,9 +212,19 @@ defmodule ThesisMonitor.DataSourceTest do
       assert DataSource.needs_latest_branch?(student) == true
     end
 
-    test "returns true for thesis repo_type" do
-      student = %Student{repo_type: "thesis"}
+    test "returns true for master repo_type (issue #11)" do
+      student = %Student{repo_type: "master"}
       assert DataSource.needs_latest_branch?(student) == true
+    end
+
+    test "returns true for latex repo_type (issue #11)" do
+      student = %Student{repo_type: "latex"}
+      assert DataSource.needs_latest_branch?(student) == true
+    end
+
+    test "returns false for legacy thesis repo_type after migration (issue #11)" do
+      student = %Student{repo_type: "thesis"}
+      assert DataSource.needs_latest_branch?(student) == false
     end
 
     test "returns false for other types" do

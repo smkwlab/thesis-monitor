@@ -301,7 +301,8 @@ defmodule ThesisMonitor.Commands.Status do
   defp format_type("wr"), do: "Weekly Report"
   defp format_type("thesis-report"), do: "Thesis Report"
   defp format_type("ise"), do: "ISE Report"
-  defp format_type("thesis"), do: "Thesis"
+  defp format_type("master"), do: "Master Thesis"
+  defp format_type("latex"), do: "LaTeX"
   defp format_type("sotsuron"), do: "Sotsuron"
   defp format_type(type), do: type
 
