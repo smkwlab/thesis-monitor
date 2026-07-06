@@ -1,15 +1,26 @@
 # Thesis Monitor Configuration Example
 # Copy this file to ~/.thesis-monitor.yml and customize
+# (or run `thesis-monitor init` to generate one)
 
 # GitHub Settings
-github_token: "your_github_token_here"
+# Token resolution order: this file > GITHUB_TOKEN env > gh CLI (gh auth token)
+# github_token: "your_github_token_here"
 github_org: "your-org"
 
-# Registry data directory (absolute path to the registry checkout's data/)
-# (legacy key "data_dir" is still accepted with a deprecation warning)
-registry_dir: "/path/to/your-student-registry/data"
+# Registry data repository (owner/repo, read via the GitHub contents API).
+# When unset, "<github_org>/thesis-student-registry" is used by convention.
+registry_repo: "your-org/thesis-student-registry"
 
-# Cache Settings
+# Legacy alternative: read a local checkout's data/ directory instead of the API.
+# Deprecated (one generation); prefer registry_repo above.
+# registry_dir: "/path/to/your-student-registry/data"
+
+# Student roster CSV for name resolution (optional).
+# The roster contains personal information: keep it as a LOCAL file only —
+# never commit it to any repository or to the registry.
+# csv_path: "/path/to/students.csv"
+
+# Cache Settings (registry API responses are cached here)
 cache_dir: "~/.cache/thesis-monitor"
 cache_ttl: 1800  # 30 minutes
 

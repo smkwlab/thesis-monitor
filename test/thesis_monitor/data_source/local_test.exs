@@ -187,6 +187,25 @@ defmodule ThesisMonitor.DataSource.LocalTest do
       assert students == []
     end
 
+    test "warns to stderr when the registry file contains invalid JSON (issue #14)" do
+      test_dir = System.tmp_dir() |> Path.join("test_invalid_warn_#{:rand.uniform(10000)}")
+      File.mkdir_p!(test_dir)
+      File.write!(Path.join(test_dir, "registry.json"), "{broken")
+      on_exit(fn -> File.rm_rf!(test_dir) end)
+
+      mock_config = fn
+        :registry_dir -> test_dir
+        _ -> nil
+      end
+
+      stderr =
+        ExUnit.CaptureIO.capture_io(:stderr, fn ->
+          assert {:ok, []} = Local.get_registry_students(mock_config)
+        end)
+
+      assert stderr =~ "invalid JSON"
+    end
+
     test "handles invalid JSON" do
       test_dir = System.tmp_dir() |> Path.join("test_invalid_json_#{:rand.uniform(10000)}")
       File.mkdir_p!(test_dir)
@@ -223,7 +242,7 @@ defmodule ThesisMonitor.DataSource.LocalTest do
       """)
 
       mock_config = fn
-        :student_csv -> csv_file
+        :csv_path -> csv_file
         _ -> nil
       end
 
@@ -240,7 +259,7 @@ defmodule ThesisMonitor.DataSource.LocalTest do
 
     test "handles missing CSV config" do
       mock_config = fn
-        :student_csv -> nil
+        :csv_path -> nil
         _ -> nil
       end
 
@@ -262,7 +281,7 @@ defmodule ThesisMonitor.DataSource.LocalTest do
       """)
 
       mock_config = fn
-        :student_csv -> csv_file
+        :csv_path -> csv_file
         _ -> nil
       end
 

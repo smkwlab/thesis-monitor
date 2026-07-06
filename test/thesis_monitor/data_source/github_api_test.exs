@@ -62,4 +62,64 @@ defmodule ThesisMonitor.DataSource.GitHubAPITest do
                "https://api.github.com/repos/smkwlab/k21rs001-wr"
     end
   end
+
+  describe "decode_contents_response/1 (issue #14)" do
+    test "decodes base64 content (contents API inserts newlines every 60 chars)" do
+      text = String.duplicate("registry content ", 10)
+
+      encoded =
+        text
+        |> Base.encode64()
+        |> String.codepoints()
+        |> Enum.chunk_every(60)
+        |> Enum.map_join("\n", &Enum.join/1)
+        |> Kernel.<>("\n")
+
+      assert {:ok, ^text} =
+               GitHubAPI.decode_contents_response(%{
+                 "content" => encoded,
+                 "encoding" => "base64"
+               })
+    end
+
+    test "returns an error for invalid base64" do
+      assert {:error, :invalid_content} =
+               GitHubAPI.decode_contents_response(%{
+                 "content" => "%%%not-base64%%%",
+                 "encoding" => "base64"
+               })
+    end
+
+    test "returns an error for an unexpected response shape" do
+      assert {:error, :invalid_content} = GitHubAPI.decode_contents_response(%{"foo" => "bar"})
+    end
+
+    test "exports get_file_contents/2" do
+      assert Code.ensure_loaded?(GitHubAPI)
+      assert {:get_file_contents, 2} in GitHubAPI.__info__(:functions)
+    end
+  end
+
+  describe "handle_contents_result/1 (issue #14)" do
+    # 404（不在）と 401/403（権限不足）の区別は「private レジストリで
+    # トークン欠如時に学生ゼロと沈黙しない」ための中核マッピング
+    test "maps 404 to :not_found" do
+      assert {:error, :not_found} = GitHubAPI.handle_contents_result({:error, 404})
+    end
+
+    test "maps 401 and 403 to :unauthorized" do
+      assert {:error, :unauthorized} = GitHubAPI.handle_contents_result({:error, 401})
+      assert {:error, :unauthorized} = GitHubAPI.handle_contents_result({:error, 403})
+    end
+
+    test "passes other errors through" do
+      assert {:error, 500} = GitHubAPI.handle_contents_result({:error, 500})
+      assert {:error, :timeout} = GitHubAPI.handle_contents_result({:error, :timeout})
+    end
+
+    test "decodes a successful response body" do
+      body = %{"content" => Base.encode64("hello"), "encoding" => "base64"}
+      assert {:ok, "hello"} = GitHubAPI.handle_contents_result({:ok, body})
+    end
+  end
 end
