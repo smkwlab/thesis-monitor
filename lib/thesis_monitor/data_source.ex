@@ -99,9 +99,11 @@ defmodule ThesisMonitor.DataSource do
   def filter_students_by_type(students, nil), do: students
   def filter_students_by_type(students, "all"), do: students
 
+  # thesis フィルタ = 論文まとめ（sotsuron ∪ master）。thesis は repository_type の
+  # 語彙ではなくフィルタ名（smkwlab/thesis-management-tools#471 の語彙設計）
   def filter_students_by_type(students, "thesis") do
     Enum.filter(students, fn student ->
-      student.repo_type in ["sotsuron", "thesis"]
+      student.repo_type in ["sotsuron", "master"]
     end)
   end
 
@@ -146,8 +148,10 @@ defmodule ThesisMonitor.DataSource do
   def needs_latest_branch?(%Student{type: type}) when type in ["thesis", "ise", "ise-report"],
     do: true
 
-  def needs_latest_branch?(%Student{repo_type: type}) when type in ["sotsuron", "thesis"],
-    do: true
+  # latex-template 派生（研究会原稿等）も draft レビュー運用のため追跡対象
+  def needs_latest_branch?(%Student{repo_type: type})
+      when type in ["sotsuron", "master", "latex"],
+      do: true
 
   def needs_latest_branch?(_), do: false
 

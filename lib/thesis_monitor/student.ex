@@ -10,7 +10,7 @@ defmodule ThesisMonitor.Student do
     :name,
     # リポジトリ名 (例: k21rs001-sotsuron)
     :repo_name,
-    # リポジトリタイプ (sotsuron, thesis, wr)
+    # リポジトリタイプ (sotsuron, master, wr, ise, latex, other)
     :repo_type,
     # 文書種別 (wr, thesis-report, ise, thesis)
     :type,
@@ -64,7 +64,7 @@ defmodule ThesisMonitor.Student do
         "#{student_id}-sotsuron"
 
       Regex.match?(~r/^k\d{2}gjk\d+$/, student_id) ->
-        "#{student_id}-thesis"
+        "#{student_id}-master"
 
       true ->
         nil
@@ -178,7 +178,7 @@ defmodule ThesisMonitor.Student do
   # リポジトリタイプに応じてステータスを適切にフォーマット
   defp format_status_by_type("completed", "wr"), do: "Active"
   defp format_status_by_type("completed", "sotsuron"), do: "Completed"
-  defp format_status_by_type("completed", "thesis"), do: "Completed"
+  defp format_status_by_type("completed", "master"), do: "Completed"
   defp format_status_by_type("completed", "ise-report"), do: "Completed"
   defp format_status_by_type("active", _), do: "Active"
   defp format_status_by_type("inactive", _), do: "Inactive"

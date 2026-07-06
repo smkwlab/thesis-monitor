@@ -211,7 +211,7 @@ defmodule ThesisMonitor.DataSource.Local do
         "#{student_id}-sotsuron"
 
       Regex.match?(~r/^k\d{2}gjk\d+$/, student_id) ->
-        "#{student_id}-thesis"
+        "#{student_id}-master"
 
       true ->
         nil
