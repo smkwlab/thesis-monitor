@@ -123,6 +123,7 @@ registry_repo: your-org/thesis-student-registry
 cache_dir: ~/.cache/thesis-monitor
 
 # 学生名取得用CSVファイル（任意。名簿はローカル管理 — リポジトリ・レジストリに置かない）
+# 未設定時は ~/.config/<github_org>/students.csv を規約として参照（存在時のみ）
 csv_path: /path/to/students.csv
 
 # パフォーマンス設定

@@ -177,6 +177,87 @@ defmodule ThesisMonitor.ConfigExtendedTest do
     end
   end
 
+  describe "csv_path convention (issue #16)" do
+    defp make_conv_home do
+      home = Path.join(System.tmp_dir(), "tm-conv-home-#{System.unique_integer([:positive])}")
+      File.mkdir_p!(home)
+      on_exit(fn -> File.rm_rf!(home) end)
+      home
+    end
+
+    test "conventional_csv_path derives from github_org" do
+      assert Config.conventional_csv_path("myorg", "/home/x") ==
+               "/home/x/.config/myorg/students.csv"
+    end
+
+    test "uses the conventional path when csv_path is unset and the file exists" do
+      home = make_conv_home()
+      conventional = Path.join([home, ".config", "testorg", "students.csv"])
+      File.mkdir_p!(Path.dirname(conventional))
+      File.write!(conventional, "header\n")
+
+      config = %{csv_path: nil, github_org: "testorg"}
+
+      assert Config.apply_csv_convention(config, home).csv_path == conventional
+    end
+
+    test "keeps csv_path nil when the conventional file does not exist" do
+      home = make_conv_home()
+      config = %{csv_path: nil, github_org: "testorg"}
+
+      assert Config.apply_csv_convention(config, home).csv_path == nil
+    end
+
+    test "an explicit csv_path wins over the conventional file" do
+      home = make_conv_home()
+      conventional = Path.join([home, ".config", "testorg", "students.csv"])
+      File.mkdir_p!(Path.dirname(conventional))
+      File.write!(conventional, "header\n")
+
+      config = %{csv_path: "/explicit/path.csv", github_org: "testorg"}
+
+      assert Config.apply_csv_convention(config, home).csv_path == "/explicit/path.csv"
+    end
+
+    test "an empty-string csv_path is treated as unset" do
+      home = make_conv_home()
+      conventional = Path.join([home, ".config", "testorg", "students.csv"])
+      File.mkdir_p!(Path.dirname(conventional))
+      File.write!(conventional, "header\n")
+
+      config = %{csv_path: "", github_org: "testorg"}
+
+      assert Config.apply_csv_convention(config, home).csv_path == conventional
+    end
+
+    test "skips the convention when github_org is nil or empty" do
+      home = make_conv_home()
+      conventional = Path.join([home, ".config", "testorg", "students.csv"])
+      File.mkdir_p!(Path.dirname(conventional))
+      File.write!(conventional, "header\n")
+
+      assert Config.apply_csv_convention(%{csv_path: nil, github_org: nil}, home).csv_path == nil
+      assert Config.apply_csv_convention(%{csv_path: nil, github_org: ""}, home).csv_path == nil
+    end
+
+    test "skips the convention when the home directory is unavailable" do
+      config = %{csv_path: nil, github_org: "testorg"}
+
+      assert Config.apply_csv_convention(config, nil).csv_path == nil
+    end
+
+    test "load applies the convention (nil for an unlikely org)" do
+      path =
+        write_tmp_config("""
+        github_org: no-such-org-#{System.unique_integer([:positive])}
+        """)
+
+      {:ok, _pid} = Config.load(path)
+
+      assert Config.get(:csv_path) == nil
+    end
+  end
+
   describe "registry_repo key (issue #14)" do
     test "loads registry_repo from config" do
       path =
