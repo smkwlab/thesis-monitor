@@ -185,5 +185,44 @@ defmodule ThesisMonitor.DataSource.LocalTest do
         File.rm_rf!(test_dir)
       end
     end
+
+    test "resolves graduate students by the 大学院学籍番号 column, in addition to 学籍番号" do
+      test_dir = System.tmp_dir() |> Path.join("test_csv_grad_#{:rand.uniform(10000)}")
+      File.mkdir_p!(test_dir)
+
+      csv_file = Path.join(test_dir, "students.csv")
+
+      # 院生は学部学籍番号（学籍番号列）を持たず大学院学籍番号のみのことがある。
+      # また内部進学者は両方を持ち、どちらの学籍番号で登録されていても解決できる
+      # 必要がある。両方の学籍番号列を同一氏名に対応づけることを検証する。
+      File.write!(
+        csv_file,
+        "卒業年度,修了年度,大学院学籍番号,学籍番号,学生氏名\n" <>
+          ",,24GJK02,,大学院太郎\n" <>
+          ",,25GJK05,20RS040,内部花子\n" <>
+          ",,,21RS001,学部次郎\n"
+      )
+
+      mock_config = fn
+        :csv_path -> csv_file
+        _ -> nil
+      end
+
+      try do
+        {:ok, names_map} = Local.get_student_names(mock_config)
+
+        # 外部院生: 大学院学籍番号で解決
+        assert names_map["k24gjk02"] == "大学院太郎"
+
+        # 内部進学: 大学院学籍番号・学部学籍番号のどちらでも同一氏名で解決
+        assert names_map["k25gjk05"] == "内部花子"
+        assert names_map["k20rs040"] == "内部花子"
+
+        # 学部生: 従来どおり学籍番号で解決
+        assert names_map["k21rs001"] == "学部次郎"
+      after
+        File.rm_rf!(test_dir)
+      end
+    end
   end
 end
