@@ -213,9 +213,11 @@ defmodule ThesisMonitor.DataSource.LocalTest do
 
         # 外部院生: 大学院学籍番号で解決
         assert names_map["k24gjk02"] == "大学院太郎"
+
         # 内部進学: 大学院学籍番号・学部学籍番号のどちらでも同一氏名で解決
         assert names_map["k25gjk05"] == "内部花子"
         assert names_map["k20rs040"] == "内部花子"
+
         # 学部生: 従来どおり学籍番号で解決
         assert names_map["k21rs001"] == "学部次郎"
       after
