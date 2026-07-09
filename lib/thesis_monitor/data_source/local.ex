@@ -93,41 +93,77 @@ defmodule ThesisMonitor.DataSource.Local do
     end
   end
 
+  # 名簿 CSV の論理カラムと、ヘッダ行での列名候補の対応。
+  # 実運用 CSV は先頭に「卒業年度」「修了年度」等の列が加わり列位置が変動するため、
+  # 列インデックスをハードコードせず、ヘッダ名から解決して列順の変化に強くする
+  # （registry-manager Issue #31 と同じ方針）。
+  # 氏名は実運用の「学生氏名」に加え、旧フォーマット互換で「氏名」も候補に含める。
+  @csv_column_candidates %{
+    student_id: ["学籍番号"],
+    student_name: ["学生氏名", "氏名"]
+  }
+
   defp parse_csv_content(content) do
-    content
-    |> String.split("\n")
-    # ヘッダー行をスキップ
-    |> Enum.drop(1)
-    |> Enum.map(&String.trim/1)
-    |> Enum.reject(&(&1 == ""))
-    |> Enum.reduce(%{}, &process_csv_line/2)
-  end
+    case split_csv_lines(content) do
+      [] ->
+        %{}
 
-  defp process_csv_line(line, acc) do
-    case String.split(line, ",") do
-      parts when length(parts) >= 4 ->
-        # 3列目（0-indexed）
-        student_id_csv = String.trim(Enum.at(parts, 2))
-        # 4列目
-        student_name = String.trim(Enum.at(parts, 3))
+      [header | rows] ->
+        columns = resolve_csv_columns(header)
 
-        process_student_entry(student_id_csv, student_name, acc)
-
-      _ ->
-        acc
+        rows
+        |> Enum.map(&String.trim/1)
+        |> Enum.reject(&(&1 == ""))
+        |> Enum.reduce(%{}, &process_csv_line(&1, columns, &2))
     end
   end
 
-  defp process_student_entry(student_id_csv, student_name, acc) do
-    if student_id_csv != "" && student_name != "" do
-      case convert_csv_id_to_system_id(student_id_csv) do
-        nil -> acc
-        system_id -> Map.put(acc, system_id, student_name)
-      end
-    else
-      acc
+  # 実運用 CSV は CRLF 改行を含む場合があるため \r?\n で分割する（registry-manager Issue #31）。
+  defp split_csv_lines(content), do: String.split(content, ~r/\r?\n/)
+
+  # ヘッダ行を論理カラム名 → 列インデックスのマップに変換する。
+  # 候補の列名のうち最初に見つかったものを採用し、無ければ nil（未取得扱い）。
+  defp resolve_csv_columns(header_line) do
+    headers =
+      header_line
+      |> String.split(",")
+      |> Enum.map(&String.trim/1)
+
+    Map.new(@csv_column_candidates, fn {key, names} ->
+      index = Enum.find_value(names, fn name -> Enum.find_index(headers, &(&1 == name)) end)
+      {key, index}
+    end)
+  end
+
+  defp process_csv_line(line, columns, acc) do
+    parts = String.split(line, ",")
+    student_id_csv = csv_field(parts, columns, :student_id)
+    student_name = csv_field(parts, columns, :student_name)
+
+    process_student_entry(student_id_csv, student_name, acc)
+  end
+
+  # 解決済みの列マップから 1 行分の指定カラム値を取り出す（trim 済み、無ければ nil）。
+  defp csv_field(parts, columns, key) do
+    case Map.get(columns, key) do
+      nil -> nil
+      index -> parts |> Enum.at(index) |> trim_csv_value()
     end
   end
+
+  defp trim_csv_value(nil), do: nil
+  defp trim_csv_value(value), do: String.trim(value)
+
+  defp process_student_entry(student_id_csv, student_name, acc)
+       when is_binary(student_id_csv) and is_binary(student_name) and
+              student_id_csv != "" and student_name != "" do
+    case convert_csv_id_to_system_id(student_id_csv) do
+      nil -> acc
+      system_id -> Map.put(acc, system_id, student_name)
+    end
+  end
+
+  defp process_student_entry(_student_id_csv, _student_name, acc), do: acc
 
   # CSVの学籍番号形式（例：80JK059）をシステム形式（例：k80jk059）に変換
   defp convert_csv_id_to_system_id(csv_id) do

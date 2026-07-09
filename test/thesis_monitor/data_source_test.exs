@@ -13,7 +13,7 @@ defmodule ThesisMonitor.DataSourceTest do
       csv_file = Path.join(test_dir, "students.csv")
 
       File.write!(csv_file, """
-      header
+      学年,学科,学籍番号,氏名
       ,,21RS001,田中太郎
       ,,22JK002,佐藤花子
       """)

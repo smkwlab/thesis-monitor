@@ -85,7 +85,7 @@ defmodule ThesisMonitor.DataSource.LocalTest do
       csv_file = Path.join(test_dir, "malformed.csv")
 
       File.write!(csv_file, """
-      header
+      学年,学科,学籍番号,氏名
       ,,21RS001,田中太郎
       ,,INVALID,無効
       ,,22JK002,佐藤花子
@@ -102,6 +102,37 @@ defmodule ThesisMonitor.DataSource.LocalTest do
         assert names_map["k21rs001"] == "田中太郎"
         assert names_map["k22jk002"] == "佐藤花子"
         refute Map.has_key?(names_map, "invalid")
+      after
+        File.rm_rf!(test_dir)
+      end
+    end
+
+    test "resolves student_id and name columns by header name regardless of column order (17-column roster, CRLF)" do
+      test_dir = System.tmp_dir() |> Path.join("test_csv_header_#{:rand.uniform(10000)}")
+      File.mkdir_p!(test_dir)
+
+      csv_file = Path.join(test_dir, "students.csv")
+
+      # 実運用の名簿は先頭に卒業年度・修了年度・大学院学籍番号などが加わり、
+      # 学籍番号/学生氏名の列位置が変動する。列名から解決できることと、
+      # CRLF 改行に対応することを検証する。
+      File.write!(
+        csv_file,
+        "卒業年度,修了年度,大学院学籍番号,学籍番号,学生氏名,カナ氏名\r\n" <>
+          "2025,,24GJK02,21RS001,田中太郎,タナカタロウ\r\n" <>
+          "2025,,,22JK002,佐藤花子,サトウハナコ\r\n"
+      )
+
+      mock_config = fn
+        :csv_path -> csv_file
+        _ -> nil
+      end
+
+      try do
+        {:ok, names_map} = Local.get_student_names(mock_config)
+
+        assert names_map["k21rs001"] == "田中太郎"
+        assert names_map["k22jk002"] == "佐藤花子"
       after
         File.rm_rf!(test_dir)
       end
