@@ -91,9 +91,15 @@ defmodule ThesisMonitor.CLI do
       Config.load(opts[:config])
     end
 
-    # OutputプロセスとTokenManagerを開始
+    # Output は全コマンドで使う
     {:ok, _pid} = Output.start_link(verbose: opts[:verbose] || false)
-    {:ok, _pid} = ThesisMonitor.TokenManager.start_link()
+
+    # init は gh CLI 経由で完結し token も不要。加えて init では Config を
+    # 読み込まず Config Agent が起動していないため、ここで TokenManager を
+    # 起動すると Config.get の GenServer.call が exit してクラッシュする。
+    unless command == "init" do
+      {:ok, _pid} = ThesisMonitor.TokenManager.start_link()
+    end
 
     case Map.fetch(@command_modules, command) do
       {:ok, module} ->
