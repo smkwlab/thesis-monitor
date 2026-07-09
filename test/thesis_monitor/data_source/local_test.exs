@@ -137,5 +137,29 @@ defmodule ThesisMonitor.DataSource.LocalTest do
         File.rm_rf!(test_dir)
       end
     end
+
+    test "strips a UTF-8 BOM so the first header column still resolves" do
+      test_dir = System.tmp_dir() |> Path.join("test_csv_bom_#{:rand.uniform(10000)}")
+      File.mkdir_p!(test_dir)
+
+      csv_file = Path.join(test_dir, "students.csv")
+
+      # Excel などが書き出す UTF-8 BOM を先頭に付ける。BOM を残すと先頭列名
+      # （ここでは学籍番号）が一致せず、氏名が解決できなくなる。
+      File.write!(csv_file, <<0xEF, 0xBB, 0xBF>> <> "学籍番号,学生氏名\n21RS001,田中太郎\n")
+
+      mock_config = fn
+        :csv_path -> csv_file
+        _ -> nil
+      end
+
+      try do
+        {:ok, names_map} = Local.get_student_names(mock_config)
+
+        assert names_map["k21rs001"] == "田中太郎"
+      after
+        File.rm_rf!(test_dir)
+      end
+    end
   end
 end

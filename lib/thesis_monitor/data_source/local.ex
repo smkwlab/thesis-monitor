@@ -104,7 +104,7 @@ defmodule ThesisMonitor.DataSource.Local do
   }
 
   defp parse_csv_content(content) do
-    case split_csv_lines(content) do
+    case content |> strip_bom() |> split_csv_lines() do
       [] ->
         %{}
 
@@ -117,6 +117,11 @@ defmodule ThesisMonitor.DataSource.Local do
         |> Enum.reduce(%{}, &process_csv_line(&1, columns, &2))
     end
   end
+
+  # Excel などが書き出す UTF-8 BOM を除去する。残すと先頭列のヘッダ名が
+  # 一致せず、列解決が失敗する。
+  defp strip_bom(<<0xEF, 0xBB, 0xBF, rest::binary>>), do: rest
+  defp strip_bom(content), do: content
 
   # 実運用 CSV は CRLF 改行を含む場合があるため \r?\n で分割する（registry-manager Issue #31）。
   defp split_csv_lines(content), do: String.split(content, ~r/\r?\n/)
