@@ -97,11 +97,14 @@ defmodule ThesisMonitor.DataSource.Local do
   # 実運用 CSV は先頭に「卒業年度」「修了年度」等の列が加わり列位置が変動するため、
   # 列インデックスをハードコードせず、ヘッダ名から解決して列順の変化に強くする
   # （registry-manager Issue #31 と同じ方針）。
+
+  # 学籍番号は「学籍番号」（学部）と「大学院学籍番号」の両方を対象にする。院生は
+  # 大学院学籍番号でレジストリ登録されることがあり、内部進学者は両方を持つため、
+  # 行内に存在する各学籍番号を同一氏名に対応づける（Issue #26）。
+  @student_id_columns ["学籍番号", "大学院学籍番号"]
+
   # 氏名は実運用の「学生氏名」に加え、旧フォーマット互換で「氏名」も候補に含める。
-  @csv_column_candidates %{
-    student_id: ["学籍番号"],
-    student_name: ["学生氏名", "氏名"]
-  }
+  @student_name_columns ["学生氏名", "氏名"]
 
   # 名簿 CSV は各フィールドにカンマ・ダブルクォートを含まない単純形式を前提とし、
   # 単純なカンマ区切りで分割する（RFC 4180 のクォート/エスケープは非対応）。将来
@@ -130,35 +133,46 @@ defmodule ThesisMonitor.DataSource.Local do
   # 実運用 CSV は CRLF 改行を含む場合があるため \r?\n で分割する（registry-manager Issue #31）。
   defp split_csv_lines(content), do: String.split(content, ~r/\r?\n/)
 
-  # ヘッダ行を論理カラム名 → 列インデックスのマップに変換する。
-  # 候補の列名のうち最初に見つかったものを採用し、無ければ nil（未取得扱い）。
+  # ヘッダ行から、学籍番号列（複数あり得る）と氏名列の位置を解決する。
   defp resolve_csv_columns(header_line) do
     headers =
       header_line
       |> String.split(",")
       |> Enum.map(&String.trim/1)
 
-    Map.new(@csv_column_candidates, fn {key, names} ->
-      index = Enum.find_value(names, fn name -> Enum.find_index(headers, &(&1 == name)) end)
-      {key, index}
-    end)
+    %{
+      # 学籍番号列は「学籍番号」「大学院学籍番号」の両方に対応するため複数 index を持つ。
+      student_id_indexes: resolve_all_indexes(headers, @student_id_columns),
+      # 氏名列は候補のうち最初に見つかった 1 列（無ければ nil）。
+      student_name_index: resolve_first_index(headers, @student_name_columns)
+    }
+  end
+
+  # 該当する列名すべての index を返す（見つからない候補は除く）。
+  defp resolve_all_indexes(headers, names) do
+    names
+    |> Enum.map(fn name -> Enum.find_index(headers, &(&1 == name)) end)
+    |> Enum.reject(&is_nil/1)
+  end
+
+  # 候補の列名のうち最初に見つかったものの index（無ければ nil）。
+  defp resolve_first_index(headers, names) do
+    Enum.find_value(names, fn name -> Enum.find_index(headers, &(&1 == name)) end)
   end
 
   defp process_csv_line(line, columns, acc) do
     parts = String.split(line, ",")
-    student_id_csv = csv_field(parts, columns, :student_id)
-    student_name = csv_field(parts, columns, :student_name)
+    student_name = field_at(parts, columns.student_name_index)
 
-    process_student_entry(student_id_csv, student_name, acc)
+    # 行内に存在する各学籍番号（学部・大学院）を同一氏名に対応づける。
+    columns.student_id_indexes
+    |> Enum.map(&field_at(parts, &1))
+    |> Enum.reduce(acc, &process_student_entry(&1, student_name, &2))
   end
 
-  # 解決済みの列マップから 1 行分の指定カラム値を取り出す（trim 済み、無ければ nil）。
-  defp csv_field(parts, columns, key) do
-    case Map.get(columns, key) do
-      nil -> nil
-      index -> parts |> Enum.at(index) |> trim_csv_value()
-    end
-  end
+  # 1 行分の指定 index の値を取り出す（trim 済み、index が nil なら nil）。
+  defp field_at(_parts, nil), do: nil
+  defp field_at(parts, index), do: parts |> Enum.at(index) |> trim_csv_value()
 
   defp trim_csv_value(nil), do: nil
   defp trim_csv_value(value), do: String.trim(value)
