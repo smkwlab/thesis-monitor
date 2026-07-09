@@ -103,20 +103,24 @@ defmodule ThesisMonitor.DataSource.Local do
     student_name: ["学生氏名", "氏名"]
   }
 
+  # 名簿 CSV は各フィールドにカンマ・ダブルクォートを含まない単純形式を前提とし、
+  # 単純なカンマ区切りで分割する（RFC 4180 のクォート/エスケープは非対応）。将来
+  # クォート付き・カンマ入りフィールドが必要になった場合は、移植元の
+  # registry-manager と足並みを揃えて NimbleCSV 等の RFC 4180 パーサを導入する。
   defp parse_csv_content(content) do
-    case content |> strip_bom() |> split_csv_lines() do
+    case content |> strip_bom() |> split_csv_lines() |> reject_blank_lines() do
       [] ->
         %{}
 
       [header | rows] ->
         columns = resolve_csv_columns(header)
-
-        rows
-        |> Enum.map(&String.trim/1)
-        |> Enum.reject(&(&1 == ""))
-        |> Enum.reduce(%{}, &process_csv_line(&1, columns, &2))
+        Enum.reduce(rows, %{}, &process_csv_line(&1, columns, &2))
     end
   end
+
+  # 末尾改行由来の空要素や空行を除く。先頭が空行だとヘッダ解決に失敗するため、
+  # ヘッダ/データ行のパターンマッチより前にまとめて除去する。
+  defp reject_blank_lines(lines), do: Enum.reject(lines, &(String.trim(&1) == ""))
 
   # Excel などが書き出す UTF-8 BOM を除去する。残すと先頭列のヘッダ名が
   # 一致せず、列解決が失敗する。

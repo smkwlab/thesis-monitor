@@ -138,6 +138,30 @@ defmodule ThesisMonitor.DataSource.LocalTest do
       end
     end
 
+    test "ignores blank lines, including a leading blank line before the header" do
+      test_dir = System.tmp_dir() |> Path.join("test_csv_blank_#{:rand.uniform(10000)}")
+      File.mkdir_p!(test_dir)
+
+      csv_file = Path.join(test_dir, "students.csv")
+
+      # 先頭・中間・末尾に空行が混じっても、ヘッダ解決とパースが成功すること。
+      File.write!(csv_file, "\n学籍番号,学生氏名\n21RS001,田中太郎\n\n22JK002,佐藤花子\n")
+
+      mock_config = fn
+        :csv_path -> csv_file
+        _ -> nil
+      end
+
+      try do
+        {:ok, names_map} = Local.get_student_names(mock_config)
+
+        assert names_map["k21rs001"] == "田中太郎"
+        assert names_map["k22jk002"] == "佐藤花子"
+      after
+        File.rm_rf!(test_dir)
+      end
+    end
+
     test "strips a UTF-8 BOM so the first header column still resolves" do
       test_dir = System.tmp_dir() |> Path.join("test_csv_bom_#{:rand.uniform(10000)}")
       File.mkdir_p!(test_dir)
