@@ -1,5 +1,7 @@
+# init コマンドは名前付き Output Agent を起動するため、他の async テストと
+# プロセス名が衝突しないよう同期実行する
 defmodule ThesisMonitor.CLITest do
-  use ExUnit.Case, async: true
+  use ExUnit.Case, async: false
   import ExUnit.CaptureIO
 
   describe "CLI module" do
@@ -31,6 +33,28 @@ defmodule ThesisMonitor.CLITest do
 
     test "module can be loaded" do
       assert Code.ensure_loaded?(ThesisMonitor.CLI)
+    end
+  end
+
+  describe "init command" do
+    # 回帰(#9): init は Config を読み込まない側なので Config Agent が起動していない。
+    # そのまま TokenManager を起動すると TokenManager が Config.get を呼び、
+    # GenServer.call が "no process" で exit してクラッシュしていた。
+    @tag :tmp_dir
+    test "runs without a Config agent and stops on existing config", %{tmp_dir: tmp_dir} do
+      config_path = Path.join(tmp_dir, "existing.yml")
+      File.write!(config_path, "github_org: smkwlab\n")
+
+      parent = self()
+
+      output =
+        capture_io(:stderr, fn ->
+          send(parent, {:result, ThesisMonitor.CLI.main(["init", "--config", config_path])})
+        end)
+
+      # --force なしなので既存 config を検出して停止する（gh は呼ばない）
+      assert_received {:result, {:error, :config_exists}}
+      assert output =~ "already exists"
     end
   end
 end
