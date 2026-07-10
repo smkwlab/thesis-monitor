@@ -14,7 +14,8 @@ defmodule ThesisMonitor.DataSource.GitHubAPI do
     "#{@base_url}/repos/#{org()}/#{repo_name}"
   end
 
-  defp org, do: ThesisMonitor.Config.get(:github_org)
+  # github_org 未設定なら "/repo" への静かな誤対象を避けて明示エラー（issue #28）
+  defp org, do: ThesisMonitor.Config.require_github_org!(ThesisMonitor.Config.get(:github_org))
 
   @doc """
   リポジトリ情報を取得

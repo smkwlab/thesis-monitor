@@ -7,7 +7,11 @@ defmodule ThesisMonitor.Config do
 
   @default_config %{
     github_token: System.get_env("GITHUB_TOKEN"),
-    github_org: "smkwlab",
+    # 既定 org は持たない（issue #28）。未設定のまま学生リポジトリ / レジストリを
+    # 読むと他 org の smkwlab データを静かに対象にしてしまうため、未設定時は
+    # registry_repo の owner から導出（apply_github_org_convention）し、それも無ければ
+    # nil のままにして消費点（require_github_org!）で明示エラーにする。
+    github_org: nil,
     # レジストリデータリポジトリ（owner/repo、contents API で読む）。未設定時は
     # "<github_org>/thesis-student-registry" 規約を導出する（DataSource.Registry）
     registry_repo: nil,
@@ -42,7 +46,10 @@ defmodule ThesisMonitor.Config do
           @default_config
       end
 
-    config = apply_csv_convention(config)
+    config =
+      config
+      |> apply_github_org_convention()
+      |> apply_csv_convention()
 
     case Process.whereis(__MODULE__) do
       nil ->
@@ -74,6 +81,50 @@ defmodule ThesisMonitor.Config do
   end
 
   def apply_csv_convention(config, _home), do: config
+
+  # github_org 未設定（nil / 空文字列）のとき、registry_repo の owner を既定として
+  # 使う（issue #28）。明示設定（config.yml / --org）が常に優先。registry_repo も
+  # 未設定なら nil のままにし、消費点（require_github_org!）で明示エラーにさせる。
+  # registry-manager#45 の owner→org 規約と揃えている。
+  # load の内部実装だが、owner 導出を直接検証するテストのために public にしている
+  # （同モジュールの apply_csv_convention と同じ慣習）。
+  @doc false
+  def apply_github_org_convention(%{github_org: org} = config) when org in [nil, ""] do
+    Map.put(config, :github_org, owner_from_registry_repo(Map.get(config, :registry_repo)))
+  end
+
+  def apply_github_org_convention(config), do: config
+
+  defp owner_from_registry_repo(registry_repo) when is_binary(registry_repo) do
+    case String.split(registry_repo, "/") do
+      [owner, _repo] when owner != "" -> owner
+      _ -> nil
+    end
+  end
+
+  defp owner_from_registry_repo(_registry_repo), do: nil
+
+  @github_org_error """
+  github_org が設定されていません。config 無しで実行すると他 org の \
+  レジストリ / 学生リポジトリを静かに対象にしてしまうため、既定 org は持ちません。
+
+  `thesis-monitor init --org <your-org>` を実行して設定ファイルを生成するか、\
+  ~/.config/thesis-monitor/config.yml に github_org（または owner を導出する \
+  registry_repo）を設定してください。\
+  """
+
+  @doc """
+  設定済みの github_org を返す。未設定（nil / 空）なら明示エラーで停止する（issue #28）。
+  `owner/repo` 名を組み立てる呼び出し側が使い、他 org への静かな誤対象（`/repo`）を防ぐ。
+  取得失敗を空リストに畳まない方針（DataSource）と同じく RuntimeError で明示する。
+  """
+  def require_github_org!(github_org) when is_binary(github_org) and github_org != "" do
+    github_org
+  end
+
+  def require_github_org!(_github_org) do
+    raise RuntimeError, @github_org_error
+  end
 
   # github_org / home が使えない環境（未設定・HOME なし）では規約導出をスキップ
   defp safe_conventional_csv_path(github_org, home)

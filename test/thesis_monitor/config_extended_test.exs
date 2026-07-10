@@ -172,13 +172,63 @@ defmodule ThesisMonitor.ConfigExtendedTest do
     end
   end
 
+  describe "github_org convention: derive from registry_repo owner (issue #28)" do
+    test "derives github_org from the registry_repo owner when unset" do
+      config = Config.apply_github_org_convention(%{github_org: nil, registry_repo: "acme/reg"})
+
+      assert config.github_org == "acme"
+    end
+
+    test "treats an empty github_org as unset and derives from registry_repo" do
+      config = Config.apply_github_org_convention(%{github_org: "", registry_repo: "acme/reg"})
+
+      assert config.github_org == "acme"
+    end
+
+    test "an explicit github_org wins over the derived owner" do
+      config =
+        Config.apply_github_org_convention(%{github_org: "explicit", registry_repo: "acme/reg"})
+
+      assert config.github_org == "explicit"
+    end
+
+    test "leaves github_org nil when neither github_org nor registry_repo is set" do
+      config = Config.apply_github_org_convention(%{github_org: nil, registry_repo: nil})
+
+      assert config.github_org == nil
+    end
+
+    test "leaves github_org nil when registry_repo is malformed (no owner/repo)" do
+      config = Config.apply_github_org_convention(%{github_org: nil, registry_repo: "noslash"})
+
+      assert config.github_org == nil
+    end
+
+    test "load derives github_org from registry_repo instead of a hardcoded default" do
+      path = write_tmp_config("registry_repo: acme/thesis-student-registry\n")
+      {:ok, _pid} = Config.load(path)
+
+      assert Config.get(:github_org) == "acme"
+    end
+
+    test "require_github_org! returns a configured org" do
+      assert Config.require_github_org!("acme") == "acme"
+    end
+
+    test "require_github_org! raises for nil or empty (issue #28)" do
+      assert_raise RuntimeError, ~r/github_org/, fn -> Config.require_github_org!(nil) end
+      assert_raise RuntimeError, ~r/github_org/, fn -> Config.require_github_org!("") end
+    end
+  end
+
   describe "agent-less fallback (issue #14)" do
     # escript の init 経路は Config.load を呼ばないまま Config.get に到達する。
     # Agent 未起動は GenServer.call の exit になるため、rescue だけでは捕捉できない
     test "get falls back to defaults when the Config agent is not running" do
       refute Process.whereis(Config)
 
-      assert Config.get(:github_org) == "smkwlab"
+      # 既定 org は持たない（issue #28）。config 無しでは nil のまま
+      assert Config.get(:github_org) == nil
     end
 
     test "get expands path defaults when the Config agent is not running" do
@@ -190,7 +240,7 @@ defmodule ThesisMonitor.ConfigExtendedTest do
     test "get_all falls back to defaults when the Config agent is not running" do
       refute Process.whereis(Config)
 
-      assert Config.get_all()[:github_org] == "smkwlab"
+      assert Config.get_all()[:github_org] == nil
     end
   end
 
@@ -255,10 +305,13 @@ defmodule ThesisMonitor.ConfigExtendedTest do
       File.rm!(test_home_config)
     end
 
-    test "uses default config when no config files exist" do
-      {:ok, _pid} = Config.load(nil)
+    test "a config file without github_org leaves it nil (no silent default org, issue #28)" do
+      # ~/.config への依存を断つため、org を持たない config を明示的に読む。
+      # 既定 org を廃止したので github_org は nil のまま、他の既定はマージで残る。
+      path = write_tmp_config("github_token: x\n")
+      {:ok, _pid} = Config.load(path)
 
-      assert Config.get(:github_org) == "smkwlab"
+      assert Config.get(:github_org) == nil
       assert Config.get(:max_concurrency) == 10
       assert Config.get(:timeout) == 10_000
     end
@@ -266,20 +319,23 @@ defmodule ThesisMonitor.ConfigExtendedTest do
     test "handles non-existent config file gracefully" do
       {:ok, _pid} = Config.load("/non/existent/path.yml")
 
-      # Should fall back to default config
-      assert Config.get(:github_org) == "smkwlab"
+      # 落ちずに設定マップを返せること（github_org の実効値は実 config 依存のため
+      # 値は検証せず、graceful に動作することだけ確認する）
+      assert is_map(Config.get_all())
     end
   end
 
   describe "get functionality" do
     setup do
-      Config.load(nil)
+      # 実 config（~/.config）への依存を断つため、既知の org を持つ config を明示的に読む
+      path = write_tmp_config("github_org: getfunc_org\n")
+      Config.load(path)
       :ok
     end
 
     test "gets value by atom key" do
       result = Config.get(:github_org)
-      assert result == "smkwlab"
+      assert result == "getfunc_org"
     end
 
     test "expands tilde in cache_dir path" do
@@ -301,7 +357,7 @@ defmodule ThesisMonitor.ConfigExtendedTest do
 
       # Test that default values are accessible
       result = Config.get(:github_org)
-      assert result == "smkwlab"
+      assert result == "getfunc_org"
     end
 
     test "handles cache_dir expansion in default config" do
@@ -324,11 +380,12 @@ defmodule ThesisMonitor.ConfigExtendedTest do
     end
 
     test "handles error conditions gracefully" do
-      {:ok, _pid} = Config.load(nil)
+      path = write_tmp_config("github_org: errcond_org\n")
+      {:ok, _pid} = Config.load(path)
 
       result = Config.get_all()
       assert is_map(result)
-      assert result[:github_org] == "smkwlab"
+      assert result[:github_org] == "errcond_org"
     end
   end
 
@@ -345,8 +402,8 @@ defmodule ThesisMonitor.ConfigExtendedTest do
       # Should fall back to default config without crashing
       {:ok, _pid} = Config.load("./malformed.yml")
 
-      # Should use default values
-      assert Config.get(:github_org) == "smkwlab"
+      # Should use default values（既定 org は廃止済みなので nil、issue #28）
+      assert Config.get(:github_org) == nil
 
       File.rm!("./malformed.yml")
     end
@@ -365,8 +422,8 @@ defmodule ThesisMonitor.ConfigExtendedTest do
       assert Config.get(:github_token) == "custom_token"
       assert Config.get(:max_concurrency) == 5
 
-      # Default values should still be present
-      assert Config.get(:github_org) == "smkwlab"
+      # Default values should still be present（github_org は既定を持たず nil、issue #28）
+      assert Config.get(:github_org) == nil
       assert Config.get(:timeout) == 10_000
 
       File.rm!("./partial.yml")
@@ -423,7 +480,9 @@ defmodule ThesisMonitor.ConfigExtendedTest do
       {:ok, pid} = Config.start_link([])
 
       assert Process.alive?(pid)
-      assert Config.get(:github_org) == "smkwlab"
+
+      # start_link は @default_config で起動する。既定 org は廃止済みなので nil（issue #28）
+      assert Config.get(:github_org) == nil
 
       Agent.stop(Config)
     end

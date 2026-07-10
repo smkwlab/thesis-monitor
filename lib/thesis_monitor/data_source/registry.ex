@@ -25,7 +25,9 @@ defmodule ThesisMonitor.DataSource.Registry do
         repo
 
       _ ->
-        "#{config_fn.(:github_org)}/#{@registry_repo_basename}"
+        # registry_repo 未設定時のみ github_org から規約導出する。未設定なら
+        # "/thesis-student-registry" への静かな誤対象を避けて明示エラー（issue #28）
+        "#{Config.require_github_org!(config_fn.(:github_org))}/#{@registry_repo_basename}"
     end
   end
 

@@ -5,10 +5,16 @@
 # GitHub Settings
 # Token resolution order: this file > GITHUB_TOKEN env > gh CLI (gh auth token)
 # github_token: "your_github_token_here"
+
+# GitHub organization. There is no built-in default (issue #28): running with no
+# github_org would otherwise silently target another org's registry. When unset,
+# it is derived from the registry_repo owner below; if neither is set, commands
+# stop with an explicit error (run `thesis-monitor init --org <your-org>`).
 github_org: "your-org"
 
 # Registry data repository (owner/repo, read via the GitHub contents API).
 # When unset, "<github_org>/thesis-student-registry" is used by convention.
+# Setting only this (with github_org unset) also fills github_org from its owner.
 registry_repo: "your-org/thesis-student-registry"
 
 # Student roster CSV for name resolution (optional).
