@@ -101,7 +101,7 @@ defmodule ThesisMonitor.DataSource do
   def filter_students_by_type(students, "all"), do: students
 
   # thesis フィルタ = 論文まとめ（sotsuron ∪ master）。thesis は repository_type の
-  # 語彙ではなくフィルタ名（smkwlab/thesis-management-tools#471 の語彙設計）
+  # 語彙ではなくフィルタ名（smkwlab/student-repo-management#471 の語彙設計）
   def filter_students_by_type(students, "thesis") do
     Enum.filter(students, fn student ->
       student.repo_type in ["sotsuron", "master"]
