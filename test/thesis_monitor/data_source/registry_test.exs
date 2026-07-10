@@ -52,6 +52,14 @@ defmodule ThesisMonitor.DataSource.RegistryTest do
 
       assert Registry.resolve_repo(config) == "testorg/thesis-student-registry"
     end
+
+    test "raises when both registry_repo and github_org are unset (issue #28)" do
+      config = api_config(%{registry_repo: nil, github_org: nil})
+
+      assert_raise RuntimeError, ~r/github_org/, fn ->
+        Registry.resolve_repo(config)
+      end
+    end
   end
 
   describe "get_registry_students/2 (api mode)" do

@@ -116,10 +116,14 @@ thesis-monitor status --config ./my-config.yml
 
 ```yaml
 # GitHub設定
+# github_org に既定値は無い（issue #28）。未設定のまま実行すると他 org の
+# レジストリを静かに対象にしてしまうため、未設定時は registry_repo の owner から
+# 導出し、それも無ければ明示エラーで停止する（`thesis-monitor init --org <org>`）。
 github_org: your-org
 
 # レジストリデータリポジトリ（owner/repo、contents API で読み取り）
-# 未設定時は <github_org>/thesis-student-registry を規約として使用
+# 未設定時は <github_org>/thesis-student-registry を規約として使用。
+# registry_repo だけ設定した場合は、その owner から github_org も導出される。
 registry_repo: your-org/thesis-student-registry
 cache_dir: ~/.cache/thesis-monitor
 

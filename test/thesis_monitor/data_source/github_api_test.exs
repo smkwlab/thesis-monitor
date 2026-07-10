@@ -55,11 +55,22 @@ defmodule ThesisMonitor.DataSource.GitHubAPITest do
                "https://api.github.com/repos/testorg/k21rs001-wr"
     end
 
-    test "falls back to default org without loaded config" do
-      ThesisMonitor.Config.load("/nonexistent/thesis-monitor.yml")
+    test "raises when github_org is not configured (issue #28)" do
+      # github_org も registry_repo も無い config を明示的に読み込み、実 config への
+      # 依存を断って決定的に未設定状態を作る（既定 org は廃止済み）
+      config_path = Path.join(System.tmp_dir!(), "thesis_monitor_no_org_test.yml")
+      File.write!(config_path, "github_token: x\n")
 
-      assert GitHubAPI.build_repo_url("k21rs001-wr") ==
-               "https://api.github.com/repos/smkwlab/k21rs001-wr"
+      on_exit(fn ->
+        File.rm(config_path)
+        ThesisMonitor.Config.load("/nonexistent/thesis-monitor.yml")
+      end)
+
+      {:ok, _} = ThesisMonitor.Config.load(config_path)
+
+      assert_raise RuntimeError, ~r/github_org/, fn ->
+        GitHubAPI.build_repo_url("k21rs001-wr")
+      end
     end
   end
 
