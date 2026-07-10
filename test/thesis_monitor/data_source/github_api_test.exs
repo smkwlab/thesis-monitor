@@ -45,8 +45,9 @@ defmodule ThesisMonitor.DataSource.GitHubAPITest do
 
       on_exit(fn ->
         File.rm(config_path)
-        # デフォルト設定に戻す
-        ThesisMonitor.Config.load("/nonexistent/thesis-monitor.yml")
+
+        # Config Agent を明示停止し、この temp config を次テストへ持ち越さない
+        if pid = Process.whereis(ThesisMonitor.Config), do: Agent.stop(pid)
       end)
 
       {:ok, _} = ThesisMonitor.Config.load(config_path)
@@ -63,7 +64,9 @@ defmodule ThesisMonitor.DataSource.GitHubAPITest do
 
       on_exit(fn ->
         File.rm(config_path)
-        ThesisMonitor.Config.load("/nonexistent/thesis-monitor.yml")
+
+        # Config Agent を明示停止し、この temp config を次テストへ持ち越さない
+        if pid = Process.whereis(ThesisMonitor.Config), do: Agent.stop(pid)
       end)
 
       {:ok, _} = ThesisMonitor.Config.load(config_path)

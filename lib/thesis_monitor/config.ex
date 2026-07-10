@@ -86,6 +86,8 @@ defmodule ThesisMonitor.Config do
   # 使う（issue #28）。明示設定（config.yml / --org）が常に優先。registry_repo も
   # 未設定なら nil のままにし、消費点（require_github_org!）で明示エラーにさせる。
   # registry-manager#45 の owner→org 規約と揃えている。
+  # load の内部実装だが、owner 導出を直接検証するテストのために public にしている
+  # （同モジュールの apply_csv_convention と同じ慣習）。
   @doc false
   def apply_github_org_convention(%{github_org: org} = config) when org in [nil, ""] do
     Map.put(config, :github_org, owner_from_registry_repo(Map.get(config, :registry_repo)))
@@ -103,7 +105,7 @@ defmodule ThesisMonitor.Config do
   defp owner_from_registry_repo(_registry_repo), do: nil
 
   @github_org_error """
-  github_org が設定されていません（issue #28）。config 無しで実行すると他 org の \
+  github_org が設定されていません。config 無しで実行すると他 org の \
   レジストリ / 学生リポジトリを静かに対象にしてしまうため、既定 org は持ちません。
 
   `thesis-monitor init --org <your-org>` を実行して設定ファイルを生成するか、\
