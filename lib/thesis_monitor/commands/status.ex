@@ -105,6 +105,10 @@ defmodule ThesisMonitor.Commands.Status do
   end
 
   defp fetch_pending_reviews_for_students(students, data_source) do
+    # on_timeout: :kill_task によりタイムアウトは {:exit, _} で返る。async_stream は
+    # 要素数を変えないため元 students と Enum.zip で 1:1 対応でき、失敗時も学生を
+    # 一覧から消さず元のまま残せる（pending_reviews: nil → "N/A"）。クロージャで
+    # student を捕捉する書き方では :exit 時に元 student を復元できないため zip を採る。
     students
     |> Task.async_stream(&fetch_pending_reviews(&1, data_source),
       ordered: true,
@@ -115,7 +119,6 @@ defmodule ThesisMonitor.Commands.Status do
     |> Enum.zip(students)
     |> Enum.map(fn
       {{:ok, student}, _original} -> student
-      # タイムアウト・例外時は学生を消さず元のまま残す（pending_reviews: nil → "N/A"）
       {_, original} -> original
     end)
   end
@@ -322,7 +325,7 @@ defmodule ThesisMonitor.Commands.Status do
       csv_optional(",#{student.type || "N/A"}", opts[:long]) <>
       csv_optional(",#{Student.repo_status(student)}", opts[:show_status]) <>
       csv_optional(",#{student.protection_status}", opts[:show_protection]) <>
-      csv_optional(",#{student.pending_reviews}", opts[:pending_reviews]) <>
+      csv_optional(",#{format_pending(student.pending_reviews)}", opts[:pending_reviews]) <>
       ",#{Student.format_last_update(student)}"
   end
 

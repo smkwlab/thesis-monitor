@@ -204,6 +204,8 @@ defmodule ThesisMonitor.DataSource.GitHubAPI do
   end
 
   defp get_pr_commits(repo_name, number) do
+    # per_page=100（GitHub の上限）まで取得。ISE レポートで 1 PR に 100 コミット超は
+    # 非現実的なためページネーションは追わない。
     url = build_repo_url(repo_name) <> "/pulls/#{number}/commits?per_page=100"
 
     case make_request(url) do
@@ -213,6 +215,8 @@ defmodule ThesisMonitor.DataSource.GitHubAPI do
   end
 
   defp get_pr_reviews(repo_name, number) do
+    # per_page=100（GitHub の上限）まで取得。1 PR に 100 レビュー超は非現実的なため
+    # ページネーションは追わない。
     url = build_repo_url(repo_name) <> "/pulls/#{number}/reviews?per_page=100"
 
     case make_request(url) do
@@ -223,6 +227,8 @@ defmodule ThesisMonitor.DataSource.GitHubAPI do
 
   @doc false
   # PR の commits リストから最新のコミット時刻（ISO8601）を返す。空/非リストなら nil。
+  # committer.date（リポジトリに反映された時刻）を使う。学生が push / rebase した後の
+  # 時刻をレビュー時刻と比較したいため、原著時刻の author.date より committer.date が適切。
   # GitHub の日時は "...Z"（UTC・固定長）で辞書順 = 時系列順のため文字列比較で足りる。
   def latest_commit_at(commits) when is_list(commits) do
     commits
