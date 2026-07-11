@@ -32,6 +32,7 @@ defmodule ThesisMonitor.CLI do
           verbose: :boolean,
           show_protection: :boolean,
           show_status: :boolean,
+          pending_reviews: :boolean,
           fullname: :boolean,
           type: :string,
           t: :boolean,
@@ -135,6 +136,7 @@ defmodule ThesisMonitor.CLI do
       --verbose           詳細ログを表示
       --show-protection   ブランチ保護状況を表示
       --show-status       リポジトリステータス（設定完了状況）を表示
+      --pending-reviews   教員の返信待ち PR 件数を表示（API 追加取得のためオプトイン）
       --fullname          名前の長い場合も切り詰めずに全文表示
       --type              リポジトリタイプで絞り込み (thesis, wr, ise-report, all)
       -t                  最終更新時刻順でソート
@@ -156,6 +158,7 @@ defmodule ThesisMonitor.CLI do
       thesis-monitor status --fullname
       thesis-monitor status --type thesis
       thesis-monitor status --type wr
+      thesis-monitor status --type ise --pending-reviews   # 教員の返信待ち PR 件数
       thesis-monitor status -t              # 時刻順でソート
       thesis-monitor status -t -r           # 時刻順の逆順（古い順）
       thesis-monitor status -r              # 学籍番号の逆順

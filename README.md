@@ -99,6 +99,10 @@ thesis-monitor status --type latex
 # ブランチ保護状況も表示
 thesis-monitor status --show-protection
 
+# 教員の返信待ち PR 件数を表示（学生が更新したのに再レビューが返っていない PR。
+# PR ごとに追加 API を叩くためオプトイン。--type と併用可）
+thesis-monitor status --type ise --pending-reviews
+
 # 詳細ログ表示
 thesis-monitor status --verbose
 
