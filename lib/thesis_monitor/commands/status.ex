@@ -300,35 +300,34 @@ defmodule ThesisMonitor.Commands.Status do
   end
 
   defp display_csv(students, opts, output) do
-    # name列をStudent IDとRepositoryの間に配置
-    base_header = "student_id,name,repository"
-    type_header = if opts[:long], do: ",type", else: ""
-    status_header = if opts[:show_status], do: ",status", else: ""
-    protection_header = if opts[:show_protection], do: ",protection", else: ""
-    pending_header = if opts[:pending_reviews], do: ",pending_reviews", else: ""
-    update_header = ",last_update"
+    call_output(output, :puts, [csv_header(opts)])
 
-    call_output(output, :puts, [
-      base_header <>
-        type_header <> status_header <> protection_header <> pending_header <> update_header
-    ])
-
-    students
-    |> Enum.each(fn student ->
-      base_data =
-        "#{student.id},#{Student.format_name(student, opts)},#{student.repo_name}"
-
-      type_data = if opts[:long], do: ",#{student.type || "N/A"}", else: ""
-      status_data = if opts[:show_status], do: ",#{Student.repo_status(student)}", else: ""
-      protection_data = if opts[:show_protection], do: ",#{student.protection_status}", else: ""
-      pending_data = if opts[:pending_reviews], do: ",#{student.pending_reviews}", else: ""
-      update_data = ",#{Student.format_last_update(student)}"
-
-      call_output(output, :puts, [
-        base_data <> type_data <> status_data <> protection_data <> pending_data <> update_data
-      ])
+    Enum.each(students, fn student ->
+      call_output(output, :puts, [csv_row(student, opts)])
     end)
   end
+
+  # name 列を Student ID と Repository の間に配置
+  defp csv_header(opts) do
+    "student_id,name,repository" <>
+      csv_optional(",type", opts[:long]) <>
+      csv_optional(",status", opts[:show_status]) <>
+      csv_optional(",protection", opts[:show_protection]) <>
+      csv_optional(",pending_reviews", opts[:pending_reviews]) <>
+      ",last_update"
+  end
+
+  defp csv_row(student, opts) do
+    "#{student.id},#{Student.format_name(student, opts)},#{student.repo_name}" <>
+      csv_optional(",#{student.type || "N/A"}", opts[:long]) <>
+      csv_optional(",#{Student.repo_status(student)}", opts[:show_status]) <>
+      csv_optional(",#{student.protection_status}", opts[:show_protection]) <>
+      csv_optional(",#{student.pending_reviews}", opts[:pending_reviews]) <>
+      ",#{Student.format_last_update(student)}"
+  end
+
+  defp csv_optional(_str, value) when value in [nil, false], do: ""
+  defp csv_optional(str, _value), do: str
 
   defp display_summary(students, opts, output) do
     total = length(students)
