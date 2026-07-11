@@ -183,6 +183,21 @@ defmodule ThesisMonitor.DataSource.GitHubAPITest do
     test "returns nil for an empty list" do
       assert GitHubAPI.latest_instructor_review_at([], "k24rs062") == nil
     end
+
+    test "excludes reviews whose user type is Bot even without a [bot] login suffix" do
+      reviews = [
+        %{
+          "user" => %{"login" => "some-app", "type" => "Bot"},
+          "submitted_at" => "2026-07-10T00:00:00Z"
+        },
+        %{
+          "user" => %{"login" => "toshi0806", "type" => "User"},
+          "submitted_at" => "2026-07-09T00:00:00Z"
+        }
+      ]
+
+      assert GitHubAPI.latest_instructor_review_at(reviews, "k24rs062") == "2026-07-09T00:00:00Z"
+    end
   end
 
   describe "pending_review?/2 (issue #31)" do

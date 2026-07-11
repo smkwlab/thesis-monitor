@@ -109,13 +109,15 @@ defmodule ThesisMonitor.Commands.Status do
     |> Task.async_stream(&fetch_pending_reviews(&1, data_source),
       ordered: true,
       timeout: 15_000,
-      max_concurrency: 10
+      max_concurrency: 10,
+      on_timeout: :kill_task
     )
+    |> Enum.zip(students)
     |> Enum.map(fn
-      {:ok, student} -> student
-      _ -> nil
+      {{:ok, student}, _original} -> student
+      # タイムアウト・例外時は学生を消さず元のまま残す（pending_reviews: nil → "N/A"）
+      {_, original} -> original
     end)
-    |> Enum.reject(&is_nil/1)
   end
 
   defp fetch_pending_reviews(student, data_source) do

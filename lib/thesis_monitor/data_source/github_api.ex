@@ -204,7 +204,7 @@ defmodule ThesisMonitor.DataSource.GitHubAPI do
   end
 
   defp get_pr_commits(repo_name, number) do
-    url = build_repo_url(repo_name) <> "/pulls/#{number}/commits"
+    url = build_repo_url(repo_name) <> "/pulls/#{number}/commits?per_page=100"
 
     case make_request(url) do
       {:ok, list} when is_list(list) -> {:ok, list}
@@ -213,7 +213,7 @@ defmodule ThesisMonitor.DataSource.GitHubAPI do
   end
 
   defp get_pr_reviews(repo_name, number) do
-    url = build_repo_url(repo_name) <> "/pulls/#{number}/reviews"
+    url = build_repo_url(repo_name) <> "/pulls/#{number}/reviews?per_page=100"
 
     case make_request(url) do
       {:ok, list} when is_list(list) -> {:ok, list}
@@ -240,7 +240,10 @@ defmodule ThesisMonitor.DataSource.GitHubAPI do
     reviews
     |> Enum.reject(fn review ->
       login = get_in(review, ["user", "login"])
-      is_nil(login) or login == student_login or String.ends_with?(login, "[bot]")
+      type = get_in(review, ["user", "type"])
+
+      is_nil(login) or login == student_login or type == "Bot" or
+        String.ends_with?(login, "[bot]")
     end)
     |> Enum.map(&get_in(&1, ["submitted_at"]))
     |> Enum.reject(&is_nil/1)
