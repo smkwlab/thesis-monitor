@@ -29,7 +29,9 @@ defmodule ThesisMonitor.Student do
     # 最新ブランチ名（PR添削用）
     :latest_branch,
     # 最終更新日時
-    :updated_at
+    :updated_at,
+    # 教員の返信待ち PR 件数（Issue #31、--pending-reviews 時のみ設定）
+    :pending_reviews
   ]
 
   @type t :: %__MODULE__{
@@ -45,7 +47,8 @@ defmodule ThesisMonitor.Student do
           visibility: String.t() | nil,
           default_branch: String.t() | nil,
           latest_branch: String.t() | nil,
-          updated_at: String.t() | nil
+          updated_at: String.t() | nil,
+          pending_reviews: non_neg_integer() | nil
         }
 
   @doc """

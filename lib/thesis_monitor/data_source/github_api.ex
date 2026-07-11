@@ -179,6 +179,86 @@ defmodule ThesisMonitor.DataSource.GitHubAPI do
     {:ok, stats}
   end
 
+  @doc """
+  オープン PR のうち「教員の返信待ち」の件数を返す（Issue #31）。
+
+  各オープン PR について、学生の最新コミット時刻が教員の最新レビュー時刻より後、
+  またはレビューが皆無（かつコミットあり）のものを「返信待ち」として数える。
+  """
+  def get_pending_review_count(%Student{repo_name: repo_name}) do
+    {:ok, open_prs} = get_pull_requests(repo_name, "open")
+    count = Enum.count(open_prs, &pr_pending_review?(repo_name, &1))
+    {:ok, count}
+  end
+
+  defp pr_pending_review?(repo_name, pr) do
+    number = pr["number"]
+    student_login = get_in(pr, ["user", "login"])
+    {:ok, commits} = get_pr_commits(repo_name, number)
+    {:ok, reviews} = get_pr_reviews(repo_name, number)
+
+    pending_review?(
+      latest_commit_at(commits),
+      latest_instructor_review_at(reviews, student_login)
+    )
+  end
+
+  defp get_pr_commits(repo_name, number) do
+    url = build_repo_url(repo_name) <> "/pulls/#{number}/commits"
+
+    case make_request(url) do
+      {:ok, list} when is_list(list) -> {:ok, list}
+      _ -> {:ok, []}
+    end
+  end
+
+  defp get_pr_reviews(repo_name, number) do
+    url = build_repo_url(repo_name) <> "/pulls/#{number}/reviews"
+
+    case make_request(url) do
+      {:ok, list} when is_list(list) -> {:ok, list}
+      _ -> {:ok, []}
+    end
+  end
+
+  @doc false
+  # PR の commits リストから最新のコミット時刻（ISO8601）を返す。空/非リストなら nil。
+  # GitHub の日時は "...Z"（UTC・固定長）で辞書順 = 時系列順のため文字列比較で足りる。
+  def latest_commit_at(commits) when is_list(commits) do
+    commits
+    |> Enum.map(&get_in(&1, ["commit", "committer", "date"]))
+    |> Enum.reject(&is_nil/1)
+    |> max_or_nil()
+  end
+
+  def latest_commit_at(_), do: nil
+
+  @doc false
+  # reviews から、学生本人（student_login）と bot を除いた「教員」レビューの
+  # 最新 submitted_at を返す。該当なしなら nil。
+  def latest_instructor_review_at(reviews, student_login) when is_list(reviews) do
+    reviews
+    |> Enum.reject(fn review ->
+      login = get_in(review, ["user", "login"])
+      is_nil(login) or login == student_login or String.ends_with?(login, "[bot]")
+    end)
+    |> Enum.map(&get_in(&1, ["submitted_at"]))
+    |> Enum.reject(&is_nil/1)
+    |> max_or_nil()
+  end
+
+  def latest_instructor_review_at(_, _), do: nil
+
+  @doc false
+  # 教員の返信待ちか。学生の最新コミットが教員の最新レビューより後、
+  # またはレビュー皆無（かつコミットあり）なら true。
+  def pending_review?(nil, _review_at), do: false
+  def pending_review?(_commit_at, nil), do: true
+  def pending_review?(commit_at, review_at), do: commit_at > review_at
+
+  defp max_or_nil([]), do: nil
+  defp max_or_nil(list), do: Enum.max(list)
+
   defp get_pull_requests(repo_name, state, opts \\ []) do
     url = build_repo_url(repo_name) <> "/pulls?state=#{state}"
 

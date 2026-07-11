@@ -185,6 +185,94 @@ defmodule ThesisMonitor.Commands.StatusTest do
       assert_received {:info, "Found 2 students total"}
       assert_received {:info, "After type filtering: 1 students"}
     end
+
+    test "shows a Pending column with the count when --pending-reviews is set (issue #31)" do
+      pid = self()
+
+      students = [
+        %Student{
+          id: "k24rs062",
+          repo_name: "k24rs062-ise-report1",
+          type: "ise",
+          repo_type: "ise"
+        }
+      ]
+
+      mock_data_source = %{
+        get_all_students: fn -> {:ok, students} end,
+        filter_students_by_type: fn s, _type -> s end,
+        get_repositories_info: fn s -> Enum.map(s, &{:ok, &1}) end,
+        needs_latest_branch?: fn _student -> false end,
+        get_latest_branch: fn _student -> {:ok, "main"} end,
+        check_branch_protection: fn student -> {:ok, student} end,
+        get_pending_review_count: fn _student -> {:ok, 2} end
+      }
+
+      mock_output = %{
+        info: fn msg -> send(pid, {:info, msg}) end,
+        puts: fn text -> send(pid, {:puts, text}) end,
+        error: fn msg -> send(pid, {:error, msg}) end,
+        warn: fn msg -> send(pid, {:warn, msg}) end,
+        print_table: fn headers, rows, _title, _opts ->
+          send(pid, {:print_table, headers, rows})
+        end
+      }
+
+      mock_token_manager = %{get_source: fn -> :config end}
+
+      deps = %{
+        data_source: mock_data_source,
+        output: mock_output,
+        token_manager: mock_token_manager
+      }
+
+      Status.run([], [pending_reviews: true], deps)
+
+      assert_received {:print_table, headers, rows}
+      assert "Pending" in headers
+      assert Enum.any?(rows, fn row -> "2" in row end)
+    end
+
+    test "does not fetch pending reviews when the option is absent (issue #31)" do
+      pid = self()
+
+      students = [%Student{id: "k24rs062", repo_name: "k24rs062-ise-report1", type: "ise"}]
+
+      mock_data_source = %{
+        get_all_students: fn -> {:ok, students} end,
+        filter_students_by_type: fn s, _type -> s end,
+        get_repositories_info: fn s -> Enum.map(s, &{:ok, &1}) end,
+        needs_latest_branch?: fn _student -> false end,
+        get_latest_branch: fn _student -> {:ok, "main"} end,
+        check_branch_protection: fn student -> {:ok, student} end,
+        get_pending_review_count: fn _student ->
+          send(pid, :pending_called)
+          {:ok, 0}
+        end
+      }
+
+      mock_output = %{
+        info: fn msg -> send(pid, {:info, msg}) end,
+        puts: fn text -> send(pid, {:puts, text}) end,
+        error: fn msg -> send(pid, {:error, msg}) end,
+        warn: fn msg -> send(pid, {:warn, msg}) end,
+        print_table: fn headers, rows, _title, _opts ->
+          send(pid, {:print_table, headers, rows})
+        end
+      }
+
+      deps = %{
+        data_source: mock_data_source,
+        output: mock_output,
+        token_manager: %{get_source: fn -> :config end}
+      }
+
+      Status.run([], [], deps)
+
+      assert_received {:print_table, headers, _rows}
+      refute "Pending" in headers
+      refute_received :pending_called
+    end
   end
 
   describe "error handling" do

@@ -129,6 +129,13 @@ defmodule ThesisMonitor.DataSource do
   end
 
   @doc """
+  オープン PR のうち教員の返信待ちの件数を取得（Issue #31）
+  """
+  def get_pending_review_count(%Student{} = student) do
+    GitHubAPI.get_pending_review_count(student)
+  end
+
+  @doc """
   最新ブランチを取得（論文・ISEレポート用）
 
   リポジトリが存在しない場合（exists: false）はブランチを取得せず nil を返す

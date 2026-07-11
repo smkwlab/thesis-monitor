@@ -94,7 +94,35 @@ defmodule ThesisMonitor.Commands.Status do
       end
 
     # 最新ブランチ情報を取得（デフォルトで取得）
-    fetch_latest_branches_for_students(students, data_source)
+    students = fetch_latest_branches_for_students(students, data_source)
+
+    # 教員の返信待ち PR 件数（オプトイン。PR ごとに追加 API を叩くため）
+    if opts[:pending_reviews] do
+      fetch_pending_reviews_for_students(students, data_source)
+    else
+      students
+    end
+  end
+
+  defp fetch_pending_reviews_for_students(students, data_source) do
+    students
+    |> Task.async_stream(&fetch_pending_reviews(&1, data_source),
+      ordered: true,
+      timeout: 15_000,
+      max_concurrency: 10
+    )
+    |> Enum.map(fn
+      {:ok, student} -> student
+      _ -> nil
+    end)
+    |> Enum.reject(&is_nil/1)
+  end
+
+  defp fetch_pending_reviews(student, data_source) do
+    case call_data_source(data_source, :get_pending_review_count, [student]) do
+      {:ok, count} -> %{student | pending_reviews: count}
+      _ -> student
+    end
   end
 
   defp fetch_protection_status_for_students(students_with_info, data_source) do
@@ -184,11 +212,14 @@ defmodule ThesisMonitor.Commands.Status do
     branch_headers = ["Latest Branch"]
     status_headers = if opts[:show_status], do: ["Status"], else: []
     protection_headers = if opts[:show_protection], do: ["Protection"], else: []
+    pending_headers = if opts[:pending_reviews], do: ["Pending"], else: []
     update_headers = ["Last Update"]
 
     headers =
       base_headers ++
-        type_headers ++ branch_headers ++ status_headers ++ protection_headers ++ update_headers
+        type_headers ++
+        branch_headers ++
+        status_headers ++ protection_headers ++ pending_headers ++ update_headers
 
     rows =
       students
@@ -212,8 +243,14 @@ defmodule ThesisMonitor.Commands.Status do
         protection_row =
           if opts[:show_protection], do: [Student.protection_icon(student)], else: []
 
+        pending_row =
+          if opts[:pending_reviews], do: [format_pending(student.pending_reviews)], else: []
+
         update_row = [Student.format_last_update(student)]
-        base_row ++ type_row ++ branch_row ++ status_row ++ protection_row ++ update_row
+
+        base_row ++
+          type_row ++
+          branch_row ++ status_row ++ protection_row ++ pending_row ++ update_row
       end)
 
     call_output(output, :print_table, [
@@ -243,8 +280,15 @@ defmodule ThesisMonitor.Commands.Status do
             base_data
           end
 
-        if opts[:show_protection] do
-          Map.put(base_data, :protection, student.protection_status)
+        base_data =
+          if opts[:show_protection] do
+            Map.put(base_data, :protection, student.protection_status)
+          else
+            base_data
+          end
+
+        if opts[:pending_reviews] do
+          Map.put(base_data, :pending_reviews, student.pending_reviews)
         else
           base_data
         end
@@ -259,10 +303,12 @@ defmodule ThesisMonitor.Commands.Status do
     type_header = if opts[:long], do: ",type", else: ""
     status_header = if opts[:show_status], do: ",status", else: ""
     protection_header = if opts[:show_protection], do: ",protection", else: ""
+    pending_header = if opts[:pending_reviews], do: ",pending_reviews", else: ""
     update_header = ",last_update"
 
     call_output(output, :puts, [
-      base_header <> type_header <> status_header <> protection_header <> update_header
+      base_header <>
+        type_header <> status_header <> protection_header <> pending_header <> update_header
     ])
 
     students
@@ -273,10 +319,11 @@ defmodule ThesisMonitor.Commands.Status do
       type_data = if opts[:long], do: ",#{student.type || "N/A"}", else: ""
       status_data = if opts[:show_status], do: ",#{Student.repo_status(student)}", else: ""
       protection_data = if opts[:show_protection], do: ",#{student.protection_status}", else: ""
+      pending_data = if opts[:pending_reviews], do: ",#{student.pending_reviews}", else: ""
       update_data = ",#{Student.format_last_update(student)}"
 
       call_output(output, :puts, [
-        base_data <> type_data <> status_data <> protection_data <> update_data
+        base_data <> type_data <> status_data <> protection_data <> pending_data <> update_data
       ])
     end)
   end
@@ -294,7 +341,18 @@ defmodule ThesisMonitor.Commands.Status do
         ""
       end
 
-    call_output(output, :puts, ["\n" <> base_summary <> protection_summary])
+    pending_summary =
+      if opts[:pending_reviews] do
+        total_pending = students |> Enum.map(&(&1.pending_reviews || 0)) |> Enum.sum()
+        repos_with_pending = Enum.count(students, &((&1.pending_reviews || 0) > 0))
+        ", Pending reviews: #{total_pending} in #{repos_with_pending} repos"
+      else
+        ""
+      end
+
+    call_output(output, :puts, [
+      "\n" <> base_summary <> protection_summary <> pending_summary
+    ])
   end
 
   defp format_type(nil), do: "N/A"
@@ -308,6 +366,9 @@ defmodule ThesisMonitor.Commands.Status do
 
   defp format_latest_branch(%Student{latest_branch: nil}), do: "N/A"
   defp format_latest_branch(%Student{latest_branch: branch}), do: branch
+
+  defp format_pending(nil), do: "N/A"
+  defp format_pending(count), do: Integer.to_string(count)
 
   # ソート処理
   defp sort_students(students, opts) do

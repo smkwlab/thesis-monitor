@@ -136,4 +136,71 @@ defmodule ThesisMonitor.DataSource.GitHubAPITest do
       assert {:ok, "hello"} = GitHubAPI.handle_contents_result({:ok, body})
     end
   end
+
+  describe "latest_commit_at/1 (issue #31)" do
+    test "returns the newest committer date" do
+      commits = [
+        %{"commit" => %{"committer" => %{"date" => "2026-07-08T06:00:00Z"}}},
+        %{"commit" => %{"committer" => %{"date" => "2026-07-09T10:00:00Z"}}},
+        %{"commit" => %{"committer" => %{"date" => "2026-07-08T23:00:00Z"}}}
+      ]
+
+      assert GitHubAPI.latest_commit_at(commits) == "2026-07-09T10:00:00Z"
+    end
+
+    test "returns nil for an empty list" do
+      assert GitHubAPI.latest_commit_at([]) == nil
+    end
+
+    test "returns nil for a non-list" do
+      assert GitHubAPI.latest_commit_at(nil) == nil
+    end
+  end
+
+  describe "latest_instructor_review_at/2 (issue #31)" do
+    test "excludes the student's own reviews and bot reviews" do
+      reviews = [
+        %{"user" => %{"login" => "k24rs062"}, "submitted_at" => "2026-07-10T00:00:00Z"},
+        %{
+          "user" => %{"login" => "github-actions[bot]"},
+          "submitted_at" => "2026-07-10T01:00:00Z"
+        },
+        %{"user" => %{"login" => "toshi0806"}, "submitted_at" => "2026-07-09T00:00:00Z"}
+      ]
+
+      assert GitHubAPI.latest_instructor_review_at(reviews, "k24rs062") == "2026-07-09T00:00:00Z"
+    end
+
+    test "returns nil when only the student and bots have reviewed" do
+      reviews = [
+        %{"user" => %{"login" => "k24rs062"}, "submitted_at" => "2026-07-10T00:00:00Z"},
+        %{"user" => %{"login" => "dependabot[bot]"}, "submitted_at" => "2026-07-10T01:00:00Z"}
+      ]
+
+      assert GitHubAPI.latest_instructor_review_at(reviews, "k24rs062") == nil
+    end
+
+    test "returns nil for an empty list" do
+      assert GitHubAPI.latest_instructor_review_at([], "k24rs062") == nil
+    end
+  end
+
+  describe "pending_review?/2 (issue #31)" do
+    test "true when the student committed but no instructor has reviewed" do
+      assert GitHubAPI.pending_review?("2026-07-08T06:00:00Z", nil) == true
+    end
+
+    test "true when the latest commit is newer than the latest instructor review" do
+      assert GitHubAPI.pending_review?("2026-07-10T00:00:00Z", "2026-07-09T00:00:00Z") == true
+    end
+
+    test "false when the instructor review is newer than the latest commit" do
+      assert GitHubAPI.pending_review?("2026-07-09T00:00:00Z", "2026-07-10T00:00:00Z") == false
+    end
+
+    test "false when there are no commits" do
+      assert GitHubAPI.pending_review?(nil, "2026-07-09T00:00:00Z") == false
+      assert GitHubAPI.pending_review?(nil, nil) == false
+    end
+  end
 end
