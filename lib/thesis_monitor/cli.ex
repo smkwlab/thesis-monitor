@@ -148,7 +148,7 @@ defmodule ThesisMonitor.CLI do
       -f, --format        出力形式 (table, json, csv)
       --verbose           詳細ログを表示
       --show-protection   ブランチ保護状況を表示
-      --show-status       リポジトリステータス（設定完了状況）を表示
+      --show-status       リポジトリの存在状態（Active / Not Found）を表示
       --pending-reviews   教員の返信待ち PR 件数を表示（API 追加取得のためオプトイン）
       --fullname          名前の長い場合も切り詰めずに全文表示
       --no-cache          キャッシュを読まず常に最新を取得（レジストリを書き換えた直後の確認用）

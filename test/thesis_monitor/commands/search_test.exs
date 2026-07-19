@@ -11,7 +11,6 @@ defmodule ThesisMonitor.Commands.SearchTest do
         name: "田中太郎",
         repo_name: "k21rs001-sotsuron",
         type: "sotsuron",
-        status: :active,
         last_push: "2025-06-23T10:00:00Z",
         protection_status: :protected
       },
@@ -20,7 +19,6 @@ defmodule ThesisMonitor.Commands.SearchTest do
         name: "佐藤花子",
         repo_name: "k22jk059-wr",
         type: "wr",
-        status: :completed,
         last_push: "2025-06-24T15:30:00Z",
         protection_status: :unprotected
       }
