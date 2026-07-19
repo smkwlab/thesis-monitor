@@ -31,6 +31,24 @@ defmodule ThesisMonitor.CLITest do
       assert output =~ "Thesis Monitor v"
     end
 
+    test "configure_logger defaults to warning level" do
+      original = Logger.level()
+      on_exit(fn -> Logger.configure(level: original) end)
+
+      ThesisMonitor.CLI.configure_logger([])
+
+      assert Logger.level() == :warning
+    end
+
+    test "configure_logger keeps debug level with verbose" do
+      original = Logger.level()
+      on_exit(fn -> Logger.configure(level: original) end)
+
+      ThesisMonitor.CLI.configure_logger(verbose: true)
+
+      assert Logger.level() == :debug
+    end
+
     test "module can be loaded" do
       assert Code.ensure_loaded?(ThesisMonitor.CLI)
     end

@@ -21,6 +21,13 @@ defmodule ThesisMonitor.CLI do
       System.halt(1)
   end
 
+  @doc false
+  # ライブラリ内部の debug ログ（req の redirect 等）が CLI 出力に混ざらないよう
+  # 既定を warning に絞る。--verbose ではトラブルシュート用に debug を残す
+  def configure_logger(opts) do
+    Logger.configure(level: if(opts[:verbose], do: :debug, else: :warning))
+  end
+
   defp parse_args(args) do
     {opts, cmd_args, _} =
       OptionParser.parse(args,
@@ -67,6 +74,7 @@ defmodule ThesisMonitor.CLI do
 
       true ->
         # デフォルトはstatusコマンドを実行
+        configure_logger(opts)
         Config.load(opts[:config])
         Config.apply_cli_overrides(opts)
         {:ok, _pid} = Output.start_link(verbose: opts[:verbose] || false)
@@ -86,6 +94,8 @@ defmodule ThesisMonitor.CLI do
   }
 
   defp process({opts, [command | args]}) do
+    configure_logger(opts)
+
     # init は設定ファイルを生成する側なので読み込まない
     # （既存 config の legacy キー警告などが init 中に混ざるのを避ける）
     unless command == "init" do

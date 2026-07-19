@@ -139,8 +139,8 @@ defmodule ThesisMonitor.Commands.StatusTest do
 
       assert_received {:info, "Found 50 students total"}
       assert_received {:info, "After type filtering: 50 students"}
-      # レート制限の警告が表示される (50 * 3 = 150 > 100)
-      assert_received {:warn, "Large number of API calls required: ~150"}
+      # 学生数によらず警告ノイズは出さない（issue #37）
+      refute_received {:warn, _}
     end
 
     test "filters students by type" do
