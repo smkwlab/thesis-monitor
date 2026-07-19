@@ -27,9 +27,6 @@ defmodule ThesisMonitor.Commands.Status do
 
     call_output(output, :info, ["After type filtering: #{length(students)} students"])
 
-    # APIレート制限チェック
-    check_rate_limit(length(students), output)
-
     # リポジトリ情報を並列取得
     students_with_info = fetch_repository_info(students, data_source)
     log_token_source(students_with_info, output, deps)
@@ -177,16 +174,6 @@ defmodule ThesisMonitor.Commands.Status do
       %{student | latest_branch: branch}
     else
       student
-    end
-  end
-
-  defp check_rate_limit(student_count, output) do
-    # 簡易的なレート制限チェック
-    estimated_calls = student_count * 3
-
-    if estimated_calls > 100 do
-      call_output(output, :warn, ["Large number of API calls required: ~#{estimated_calls}"])
-      call_output(output, :warn, ["Consider using cache or limiting concurrent requests"])
     end
   end
 
