@@ -89,9 +89,7 @@ defmodule ThesisMonitor.Commands.Search do
     call_output(output, :puts, ["リポジトリ: #{student.repo_name}"])
     call_output(output, :puts, ["タイプ: #{format_type(student.type)}"])
 
-    if student.status do
-      call_output(output, :puts, ["ステータス: #{Student.repo_status(student)}"])
-    end
+    call_output(output, :puts, ["ステータス: #{Student.repo_status(student)}"])
 
     if student.last_push do
       call_output(output, :puts, ["最終更新: #{Student.format_last_update(student)}"])

@@ -101,18 +101,13 @@ defmodule ThesisMonitor.StudentTest do
       assert Student.repo_status(student) == "Not Found"
     end
 
-    test "handles nil status for existing repository" do
+    test "returns Active for existing repository" do
       student = %Student{
         exists: true,
-        status: nil,
         repo_type: "sotsuron"
       }
 
-      # When status is nil but exists is true, should return "Active"
-      # But the actual behavior might be different based on pattern matching
-      result = Student.repo_status(student)
-      # Accept either "Active" or "Nil" based on actual implementation
-      assert result in ["Active", "Nil"]
+      assert Student.repo_status(student) == "Active"
     end
 
     test "returns Unknown for repository with unknown existence" do
@@ -123,16 +118,8 @@ defmodule ThesisMonitor.StudentTest do
       assert Student.repo_status(student) == "Unknown"
     end
 
-    test "returns formatted status for existing repository with status" do
-      student = %Student{
-        exists: true,
-        status: :active,
-        repo_type: "sotsuron"
-      }
-
-      # This will call format_status_by_type which we can't test without seeing implementation
-      result = Student.repo_status(student)
-      assert is_binary(result)
+    test "struct does not carry the removed registry status field" do
+      refute Map.has_key?(%Student{}, :status)
     end
   end
 

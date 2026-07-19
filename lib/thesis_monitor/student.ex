@@ -14,8 +14,6 @@ defmodule ThesisMonitor.Student do
     :repo_type,
     # 文書種別 (wr, thesis-report, ise, thesis)
     :type,
-    # ステータス (active, inactive, completed)
-    :status,
     # ブランチ保護状態 (protected, unprotected)
     :protection_status,
     # リポジトリ存在フラグ
@@ -40,7 +38,6 @@ defmodule ThesisMonitor.Student do
           repo_name: String.t(),
           repo_type: String.t() | nil,
           type: String.t() | nil,
-          status: atom() | nil,
           protection_status: atom() | nil,
           exists: boolean() | nil,
           last_push: String.t() | nil,
@@ -103,21 +100,9 @@ defmodule ThesisMonitor.Student do
   def protection_icon(_), do: "❓"
 
   @doc """
-  リポジトリ状態を取得
-  リポジトリタイプに応じて適切な状態表示を行う
+  リポジトリの存在状態を取得（Active / Not Found / Unknown）
   """
   def repo_status(%__MODULE__{exists: false}), do: "Not Found"
-
-  def repo_status(%__MODULE__{status: status, repo_type: repo_type, exists: true})
-      when is_atom(status) do
-    format_status_by_type(Atom.to_string(status), repo_type)
-  end
-
-  def repo_status(%__MODULE__{status: status, repo_type: repo_type, exists: true})
-      when is_binary(status) do
-    format_status_by_type(status, repo_type)
-  end
-
   def repo_status(%__MODULE__{exists: true}), do: "Active"
   def repo_status(_), do: "Unknown"
 
@@ -177,13 +162,4 @@ defmodule ThesisMonitor.Student do
       acc + char_width
     end)
   end
-
-  # リポジトリタイプに応じてステータスを適切にフォーマット
-  defp format_status_by_type("completed", "wr"), do: "Active"
-  defp format_status_by_type("completed", "sotsuron"), do: "Completed"
-  defp format_status_by_type("completed", "master"), do: "Completed"
-  defp format_status_by_type("completed", "ise-report"), do: "Completed"
-  defp format_status_by_type("active", _), do: "Active"
-  defp format_status_by_type("inactive", _), do: "Inactive"
-  defp format_status_by_type(status, _), do: String.capitalize(status)
 end

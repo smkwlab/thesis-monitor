@@ -32,7 +32,6 @@ defmodule ThesisMonitor.DataSource.Local do
       repo_name: repo_name,
       repo_type: Map.get(data, "repository_type", "sotsuron"),
       type: Map.get(data, "repository_type", "sotsuron"),
-      status: String.to_atom(Map.get(data, "status", "active")),
       updated_at: Map.get(data, "updated_at")
     }
   end
