@@ -1,6 +1,6 @@
 defmodule ThesisMonitor.DataSource.Local do
   @moduledoc """
-  ローカルの名簿 CSV 読み込みと、レジストリ/protection-status 本文のパース
+  ローカルの名簿 CSV 読み込みと、レジストリ本文のパース
 
   レジストリ本体の取得は DataSource.Registry（contents API）が担当する。
   名簿 CSV は個人情報を含むためローカル管理（リポジトリ・レジストリに置かない）。
@@ -19,45 +19,11 @@ defmodule ThesisMonitor.DataSource.Local do
   end
 
   @doc false
-  # protection-status ファイルの本文をパースする（Registry の API 経路から使う）
-  def parse_protection_content(content) do
-    content
-    |> String.split("\n")
-    |> Enum.map(&parse_student_line/1)
-    |> Enum.reject(&is_nil/1)
-  end
-
-  @doc false
   # デコード済みレジストリデータを学生リストにする（Registry の API 経路から使う）
   def parse_registry_data(data) do
     data
     |> Enum.map(&parse_registry_entry/1)
     |> Enum.reject(&is_nil/1)
-  end
-
-  defp parse_student_line(line) do
-    case Regex.run(~r/Student: (k\d{2}(rs|jk|gjk)\d+)/, line) do
-      [_, student_id | _] ->
-        %Student{
-          id: student_id,
-          repo_name: determine_repo_name(student_id),
-          status: :protected
-        }
-
-      _ ->
-        # フォールバック: 行頭の学生IDを抽出
-        case Regex.run(~r/^(k\d{2}(rs|jk|gjk)\d+)/, line) do
-          [_, student_id | _] ->
-            %Student{
-              id: student_id,
-              repo_name: determine_repo_name(student_id),
-              status: :protected
-            }
-
-          _ ->
-            nil
-        end
-    end
   end
 
   defp parse_registry_entry({repo_name, %{"student_id" => student_id} = data}) do
@@ -195,19 +161,6 @@ defmodule ThesisMonitor.DataSource.Local do
         "k#{year}#{String.downcase(type)}#{number}"
 
       _ ->
-        nil
-    end
-  end
-
-  defp determine_repo_name(student_id) do
-    cond do
-      Regex.match?(~r/^k\d{2}(rs|jk)\d+$/, student_id) ->
-        "#{student_id}-sotsuron"
-
-      Regex.match?(~r/^k\d{2}gjk\d+$/, student_id) ->
-        "#{student_id}-master"
-
-      true ->
         nil
     end
   end

@@ -158,29 +158,4 @@ defmodule ThesisMonitor.DataSource.RegistryTest do
       assert :counters.get(counter, 1) == 1
     end
   end
-
-  describe "get_students/2 (protection status, api mode)" do
-    test "fetches and parses the protection status file" do
-      fetch = fn _repo, "data/protection-status/completed-protection.txt" ->
-        {:ok, "Student: k21rs001 - Protected\n"}
-      end
-
-      assert {:ok, [%Student{id: "k21rs001", status: :protected}]} =
-               Registry.get_students(api_config(), fetch)
-    end
-
-    test "missing protection file yields an empty list (file is optional)" do
-      fetch = fn _repo, _path -> {:error, :not_found} end
-
-      assert {:ok, []} = Registry.get_students(api_config(), fetch)
-    end
-
-    test "raises when the protection file fetch is unauthorized" do
-      fetch = fn _repo, _path -> {:error, :unauthorized} end
-
-      assert_raise RuntimeError, ~r/token/i, fn ->
-        Registry.get_students(api_config(), fetch)
-      end
-    end
-  end
 end

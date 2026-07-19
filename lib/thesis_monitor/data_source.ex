@@ -12,31 +12,17 @@ defmodule ThesisMonitor.DataSource do
   }
 
   @doc """
-  全学生のリストを取得
+  全学生のリストを取得（registry.json が唯一のソース。名簿 CSV は氏名補完のみ）
   """
   def get_all_students do
-    with {:ok, local_students} <- Registry.get_students(),
-         {:ok, registry_students} <- Registry.get_registry_students(),
-         {:ok, names_map} <- Local.get_student_names() do
-      students =
-        (local_students ++ registry_students)
-        |> Enum.uniq_by(& &1.repo_name)
-        |> Enum.map(&add_student_name(&1, names_map))
-        |> Enum.sort_by(&student_sort_key/1)
-
-      {:ok, students}
-    else
-      _error ->
-        registry_only_students()
-    end
-  end
-
-  # フォールバック: レジストリのみからデータを取得
-  # （Registry は {:ok, _} を返すか raise するかのどちらか。ここに来るのは
-  #   CSV 名簿の読み取りが {:error, _} を返した場合のみ）
-  defp registry_only_students do
     {:ok, students} = Registry.get_registry_students()
-    {:ok, add_names_if_available(students)}
+
+    students =
+      students
+      |> add_names_if_available()
+      |> Enum.sort_by(&student_sort_key/1)
+
+    {:ok, students}
   end
 
   # CSVから名前を取得できない場合でも、学生データは返す
