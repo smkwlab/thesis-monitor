@@ -48,5 +48,21 @@ defmodule ThesisMonitor.ConfigTest do
       result = Config.get_all()
       assert is_map(result)
     end
+
+    test "apply_cli_overrides with no_cache sets cache_ttl to 0" do
+      assert Config.get(:cache_ttl) == 1800
+
+      Config.apply_cli_overrides(no_cache: true)
+
+      assert Config.get(:cache_ttl) == 0
+    end
+
+    test "apply_cli_overrides without no_cache keeps cache_ttl" do
+      Config.apply_cli_overrides([])
+      assert Config.get(:cache_ttl) == 1800
+
+      Config.apply_cli_overrides(no_cache: false)
+      assert Config.get(:cache_ttl) == 1800
+    end
   end
 end

@@ -61,6 +61,21 @@ defmodule ThesisMonitor.Config do
     end
   end
 
+  @doc """
+  CLI オプション由来の設定上書きを適用する（Config.load の後に呼ぶ）。
+
+  `--no-cache` は cache_ttl を 0 にする。Cache は ttl <= 0 でキャッシュを
+  読まず常に fetch する（fetch 結果の書き込みは行われるため、以後の
+  通常実行もこのとき取得した最新値から始まる）。
+  """
+  def apply_cli_overrides(opts) do
+    if opts[:no_cache] do
+      Agent.update(__MODULE__, &Map.put(&1, :cache_ttl, 0))
+    end
+
+    :ok
+  end
+
   # csv_path 未設定（nil / 空文字列）のとき、規約パス
   # ~/.config/<github_org>/students.csv が存在すればそれを使う（issue #16）。
   # 明示設定が常に優先。registry-manager も同じ規約パスを参照する。

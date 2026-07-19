@@ -34,6 +34,7 @@ defmodule ThesisMonitor.CLI do
           show_status: :boolean,
           pending_reviews: :boolean,
           fullname: :boolean,
+          no_cache: :boolean,
           type: :string,
           t: :boolean,
           r: :boolean,
@@ -67,6 +68,7 @@ defmodule ThesisMonitor.CLI do
       true ->
         # デフォルトはstatusコマンドを実行
         Config.load(opts[:config])
+        Config.apply_cli_overrides(opts)
         {:ok, _pid} = Output.start_link(verbose: opts[:verbose] || false)
         {:ok, _pid} = ThesisMonitor.TokenManager.start_link()
         Commands.Status.run([], opts)
@@ -88,6 +90,7 @@ defmodule ThesisMonitor.CLI do
     # （既存 config の legacy キー警告などが init 中に混ざるのを避ける）
     unless command == "init" do
       Config.load(opts[:config])
+      Config.apply_cli_overrides(opts)
     end
 
     # Output は全コマンドで使う
@@ -138,6 +141,7 @@ defmodule ThesisMonitor.CLI do
       --show-status       リポジトリステータス（設定完了状況）を表示
       --pending-reviews   教員の返信待ち PR 件数を表示（API 追加取得のためオプトイン）
       --fullname          名前の長い場合も切り詰めずに全文表示
+      --no-cache          キャッシュを読まず常に最新を取得（レジストリを書き換えた直後の確認用）
       --type              リポジトリタイプで絞り込み (thesis, wr, ise-report, all)
       -t                  最終更新時刻順でソート
       -r                  ソート順を逆順にする
