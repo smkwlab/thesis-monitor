@@ -5,7 +5,7 @@ defmodule ThesisMonitor.DataSourceTest do
   alias ThesisMonitor.DataSource.{Local, Registry}
 
   describe "get_all_students/0" do
-    test "merges protection and registry students without duplicates (via Registry + CSV)" do
+    test "loads registry students and resolves names (via Registry + CSV)" do
       test_dir = System.tmp_dir() |> Path.join("test_datasource_#{:rand.uniform(10000)}")
       File.mkdir_p!(test_dir)
       on_exit(fn -> File.rm_rf!(test_dir) end)
@@ -34,23 +34,14 @@ defmodule ThesisMonitor.DataSourceTest do
 
       fetch = fn
         _repo, "data/registry.json" -> {:ok, registry_json}
-        _repo, "data/protection-status/completed-protection.txt" -> {:ok, "Student: k21rs001\n"}
       end
 
-      {:ok, protection_students} = Registry.get_students(mock_config, fetch)
       {:ok, registry_students} = Registry.get_registry_students(mock_config, fetch)
       {:ok, names_map} = Local.get_student_names(mock_config)
 
-      assert length(protection_students) == 1
       assert length(registry_students) == 2
       assert names_map["k21rs001"] == "田中太郎"
       assert names_map["k22jk002"] == "佐藤花子"
-
-      # k21rs001 は protection と registry の両方に居るが repo_name で重複排除される
-      unique_students =
-        (protection_students ++ registry_students) |> Enum.uniq_by(& &1.repo_name)
-
-      assert length(unique_students) == 2
     end
 
     test "handles sort order correctly" do

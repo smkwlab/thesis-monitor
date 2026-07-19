@@ -3,25 +3,6 @@ defmodule ThesisMonitor.DataSource.LocalTest do
   alias ThesisMonitor.DataSource.Local
   alias ThesisMonitor.Student
 
-  describe "parse_protection_content/1" do
-    test "parses student entries and the fallback line format" do
-      content = """
-      Student: k21rs001 - Protected
-      k22jk002 protected at 2026-01-01
-      not a student line
-      """
-
-      students = Local.parse_protection_content(content)
-
-      assert [
-               %Student{id: "k21rs001", status: :protected},
-               %Student{id: "k22jk002", status: :protected}
-             ] = students
-
-      assert hd(students).repo_name == "k21rs001-sotsuron"
-    end
-  end
-
   describe "parse_registry_data/1" do
     test "builds students from decoded registry data, skipping invalid entries" do
       data = %{

@@ -15,7 +15,6 @@ defmodule ThesisMonitor.DataSource.Registry do
 
   @registry_repo_basename "thesis-student-registry"
   @registry_file_path "data/registry.json"
-  @protection_file_path "data/protection-status/completed-protection.txt"
 
   # 読み取り先リポジトリ（owner/repo）を解決する: 明示設定 > 規約導出
   @doc false
@@ -45,24 +44,6 @@ defmodule ThesisMonitor.DataSource.Registry do
     fetch_registry(resolve_repo(config_fn), config_fn, fetch_fn)
   end
 
-  @doc """
-  保護設定完了済み学生のリストを取得（protection-status ファイル。無ければ空）
-
-  ファイル不在（404）は任意ファイルなので空リストだが、401/403 は
-  レジストリ自体への権限欠如と同義なので registry.json と同様に raise する
-  """
-  @spec get_students((atom() -> term()), (String.t(), String.t() -> term())) ::
-          {:ok, [ThesisMonitor.Student.t()]}
-  def get_students(config_fn \\ &Config.get/1, fetch_fn \\ &GitHubAPI.get_file_contents/2) do
-    repo = resolve_repo(config_fn)
-
-    case fetch_cached(repo, @protection_file_path, config_fn, fetch_fn) do
-      {:ok, content} -> {:ok, Local.parse_protection_content(content)}
-      {:error, :not_found} -> {:ok, []}
-      {:error, reason} -> raise_api_error(repo, @protection_file_path, reason)
-    end
-  end
-
   defp fetch_registry(repo, config_fn, fetch_fn) do
     case fetch_json_cached(repo, @registry_file_path, config_fn, fetch_fn) do
       {:ok, data} ->
@@ -80,10 +61,6 @@ defmodule ThesisMonitor.DataSource.Registry do
       {:error, reason} ->
         raise_api_error(repo, @registry_file_path, reason)
     end
-  end
-
-  defp fetch_cached(repo, path, config_fn, fetch_fn) do
-    Cache.get_or_fetch("#{repo}:#{path}", fn -> fetch_fn.(repo, path) end, config_fn)
   end
 
   # JSON ファイル用: fetch 時に検証してから（Cache 側で）保存し、不正 JSON を

@@ -41,8 +41,6 @@ defmodule ThesisMonitor.DataSourceIntegrationTest do
   end
 
   test "get_all_students reads students through the API-mode pipeline" do
-    prime_cache("#{@repo}:data/protection-status/completed-protection.txt", "")
-
     prime_cache(
       "#{@repo}:data/registry.json",
       Jason.encode!(%{
@@ -55,11 +53,10 @@ defmodule ThesisMonitor.DataSourceIntegrationTest do
   end
 
   test "a Registry RuntimeError propagates out of get_all_students (no silent empty list)" do
-    prime_cache("#{@repo}:data/protection-status/completed-protection.txt", "")
     prime_cache("#{@repo}:data/registry.json", "{corrupted json")
 
-    # get_all_students の with/else が例外を registry_only_students() に
-    # 畳み込まないこと（空リスト沈黙の防止、issue #14 の中核保証）
+    # get_all_students が例外を空リストに畳み込まないこと
+    # （空リスト沈黙の防止、issue #14 の中核保証）
     assert_raise RuntimeError, ~r/JSON/i, fn ->
       DataSource.get_all_students()
     end
