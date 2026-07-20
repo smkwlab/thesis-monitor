@@ -149,7 +149,10 @@ defmodule ThesisMonitor.DataSource do
   def needs_latest_branch?(_), do: false
 
   @doc """
-  archive 済みの学生を除外する（show_archived が真なら除外しない）
+  archive 済みの学生を除外する。
+
+  show_archived が `true` のときだけ除外せず全件返す。`false`・`nil`
+  （オプション未指定）はいずれも「除外する」= 現役のみに絞る。
   """
   def reject_archived(students, true), do: students
   def reject_archived(students, _show_archived), do: Enum.reject(students, &Student.archived?/1)
