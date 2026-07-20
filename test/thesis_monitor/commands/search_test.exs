@@ -109,5 +109,28 @@ defmodule ThesisMonitor.Commands.SearchTest do
       assert_received {:info, "=== 学生情報 ==="}
       assert_received {:puts, "学生ID: k21rs001"}
     end
+
+    test "shows the Poster label for poster students" do
+      pid = self()
+
+      poster_student = %Student{
+        id: "k25gjk04",
+        repo_name: "k25gjk04-midterm-poster",
+        type: "poster",
+        review_flow: true
+      }
+
+      deps = %{
+        data_source: %{get_all_students: fn -> {:ok, [poster_student]} end},
+        output: %{
+          info: fn msg -> send(pid, {:info, msg}) end,
+          puts: fn text -> send(pid, {:puts, text}) end
+        }
+      }
+
+      Search.run(["k25gjk04"], [], deps)
+
+      assert_received {:puts, "タイプ: Poster"}
+    end
   end
 end

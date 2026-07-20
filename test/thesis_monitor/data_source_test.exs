@@ -160,52 +160,26 @@ defmodule ThesisMonitor.DataSourceTest do
   end
 
   describe "needs_latest_branch?/1" do
-    test "returns true for thesis type" do
-      student = %Student{type: "thesis"}
+    test "returns true when review_flow is set" do
+      student = %Student{review_flow: true}
       assert DataSource.needs_latest_branch?(student) == true
     end
 
-    test "returns true for ise type" do
-      student = %Student{type: "ise"}
-      assert DataSource.needs_latest_branch?(student) == true
-    end
-
-    test "returns true for ise-report type" do
-      student = %Student{type: "ise-report"}
-      assert DataSource.needs_latest_branch?(student) == true
-    end
-
-    test "returns true for sotsuron repo_type" do
-      student = %Student{repo_type: "sotsuron"}
-      assert DataSource.needs_latest_branch?(student) == true
-    end
-
-    test "returns true for master repo_type (issue #11)" do
-      student = %Student{repo_type: "master"}
-      assert DataSource.needs_latest_branch?(student) == true
-    end
-
-    test "returns true for latex repo_type (issue #11)" do
-      student = %Student{repo_type: "latex"}
-      assert DataSource.needs_latest_branch?(student) == true
-    end
-
-    test "returns false for legacy thesis repo_type after migration (issue #11)" do
-      student = %Student{repo_type: "thesis"}
+    test "returns false when review_flow is false" do
+      student = %Student{review_flow: false}
       assert DataSource.needs_latest_branch?(student) == false
     end
 
-    test "legacy registry entries stay tracked via the mirrored type field (issue #11)" do
-      # local.ex は type と repo_type の両方に registry の repository_type を
-      # 入れるため、移行前の legacy thesis エントリは type 節で追跡が継続する
-      # （データ移行までの断絶は発生しない）
-      student = %Student{type: "thesis", repo_type: "thesis"}
-      assert DataSource.needs_latest_branch?(student) == true
-    end
+    test "ignores the repository type (review_flow is the only criterion)" do
+      # REVIEW_FLOW=off の latex は追跡しない / review_flow=true の poster は追跡する
+      assert DataSource.needs_latest_branch?(%Student{repo_type: "latex", review_flow: false}) ==
+               false
 
-    test "returns false for other types" do
-      student = %Student{type: "wr"}
-      assert DataSource.needs_latest_branch?(student) == false
+      assert DataSource.needs_latest_branch?(%Student{repo_type: "poster", review_flow: true}) ==
+               true
+
+      assert DataSource.needs_latest_branch?(%Student{repo_type: "sotsuron", review_flow: false}) ==
+               false
     end
 
     test "returns false for empty student" do

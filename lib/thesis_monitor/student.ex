@@ -10,8 +10,10 @@ defmodule ThesisMonitor.Student do
     :name,
     # リポジトリ名 (例: k21rs001-sotsuron)
     :repo_name,
-    # リポジトリタイプ (sotsuron, master, wr, ise, latex, other)
+    # リポジトリタイプ (sotsuron, master, wr, ise, latex, poster, other)
     :repo_type,
+    # draft PR サイクルで運用するリポジトリか（registry の review_flow）
+    :review_flow,
     # 文書種別 (wr, thesis-report, ise, thesis)
     :type,
     # ブランチ保護状態 (protected, unprotected)
@@ -37,6 +39,7 @@ defmodule ThesisMonitor.Student do
           name: String.t() | nil,
           repo_name: String.t(),
           repo_type: String.t() | nil,
+          review_flow: boolean() | nil,
           type: String.t() | nil,
           protection_status: atom() | nil,
           exists: boolean() | nil,

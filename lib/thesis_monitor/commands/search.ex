@@ -130,6 +130,7 @@ defmodule ThesisMonitor.Commands.Search do
   defp format_type("ise"), do: "ISE Report"
   defp format_type("master"), do: "Master Thesis"
   defp format_type("latex"), do: "LaTeX"
+  defp format_type("poster"), do: "Poster"
   defp format_type("sotsuron"), do: "Sotsuron"
   defp format_type(type), do: type
 
