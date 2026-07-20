@@ -137,16 +137,12 @@ defmodule ThesisMonitor.DataSource do
   end
 
   @doc """
-  最新ブランチが必要なタイプかチェック
+  最新ブランチの追跡が必要かチェック
+
+  registry の review_flow（draft PR サイクルで運用するリポジトリか）だけで
+  判定する。リポジトリタイプは文書種別であり追跡要否とは独立。
   """
-  def needs_latest_branch?(%Student{type: type}) when type in ["thesis", "ise", "ise-report"],
-    do: true
-
-  # latex-template 派生（研究会原稿等）も draft レビュー運用のため追跡対象
-  def needs_latest_branch?(%Student{repo_type: type})
-      when type in ["sotsuron", "master", "latex"],
-      do: true
-
+  def needs_latest_branch?(%Student{review_flow: true}), do: true
   def needs_latest_branch?(_), do: false
 
   # 学生のソートキーを生成: {年度, 学科優先度, 番号, リポジトリ名}

@@ -17,6 +17,48 @@ defmodule ThesisMonitor.DataSource.LocalTest do
       assert [%Student{id: "k21rs001", repo_name: "k21rs001-sotsuron", repo_type: "sotsuron"}] =
                Local.parse_registry_data(data)
     end
+
+    test "carries review_flow into the student struct" do
+      data = %{
+        "k21rs001-sotsuron" => %{
+          "student_id" => "k21rs001",
+          "repository_type" => "sotsuron",
+          "review_flow" => true
+        },
+        "k21rs002-wr" => %{
+          "student_id" => "k21rs002",
+          "repository_type" => "wr",
+          "review_flow" => false
+        }
+      }
+
+      students = data |> Local.parse_registry_data() |> Enum.sort_by(& &1.id)
+
+      assert [%Student{review_flow: true}, %Student{review_flow: false}] = students
+    end
+
+    test "defaults review_flow to false when the field is absent" do
+      data = %{
+        "k21rs001-sotsuron" => %{
+          "student_id" => "k21rs001",
+          "repository_type" => "sotsuron"
+        }
+      }
+
+      assert [%Student{review_flow: false}] = Local.parse_registry_data(data)
+    end
+
+    test "reads registry_updated_at into updated_at" do
+      data = %{
+        "k21rs001-sotsuron" => %{
+          "student_id" => "k21rs001",
+          "repository_type" => "sotsuron",
+          "registry_updated_at" => "2026-07-20T04:00:00Z"
+        }
+      }
+
+      assert [%Student{updated_at: "2026-07-20T04:00:00Z"}] = Local.parse_registry_data(data)
+    end
   end
 
   describe "get_student_names/1" do
