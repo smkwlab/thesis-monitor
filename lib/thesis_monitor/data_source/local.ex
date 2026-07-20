@@ -33,6 +33,7 @@ defmodule ThesisMonitor.DataSource.Local do
       repo_type: Map.get(data, "repository_type", "sotsuron"),
       type: Map.get(data, "repository_type", "sotsuron"),
       review_flow: Map.get(data, "review_flow", false),
+      archived_at: Map.get(data, "archived_at"),
       updated_at: Map.get(data, "registry_updated_at")
     }
   end

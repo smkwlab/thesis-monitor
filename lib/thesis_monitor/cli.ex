@@ -42,6 +42,7 @@ defmodule ThesisMonitor.CLI do
           pending_reviews: :boolean,
           fullname: :boolean,
           no_cache: :boolean,
+          show_archived: :boolean,
           type: :string,
           t: :boolean,
           r: :boolean,
@@ -152,6 +153,7 @@ defmodule ThesisMonitor.CLI do
       --pending-reviews   教員の返信待ち PR 件数を表示（API 追加取得のためオプトイン）
       --fullname          名前の長い場合も切り詰めずに全文表示
       --no-cache          キャッシュを読まず常に最新を取得（レジストリを書き換えた直後の確認用）
+      --show-archived     archive 済みリポジトリも一覧に表示（既定は現役のみ）
       --type              リポジトリタイプで絞り込み (thesis, wr, ise-report, all)
       -t                  最終更新時刻順でソート
       -r                  ソート順を逆順にする

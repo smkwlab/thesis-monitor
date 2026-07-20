@@ -59,6 +59,30 @@ defmodule ThesisMonitor.DataSource.LocalTest do
 
       assert [%Student{updated_at: "2026-07-20T04:00:00Z"}] = Local.parse_registry_data(data)
     end
+
+    test "carries archived_at into the student struct" do
+      data = %{
+        "k25gjk04-midterm-poster" => %{
+          "student_id" => "k25gjk04",
+          "repository_type" => "poster",
+          "review_flow" => true,
+          "archived_at" => "2026-07-20T05:56:07Z"
+        }
+      }
+
+      assert [%Student{archived_at: "2026-07-20T05:56:07Z"}] = Local.parse_registry_data(data)
+    end
+
+    test "leaves archived_at nil when the field is absent" do
+      data = %{
+        "k21rs001-sotsuron" => %{
+          "student_id" => "k21rs001",
+          "repository_type" => "sotsuron"
+        }
+      }
+
+      assert [%Student{archived_at: nil}] = Local.parse_registry_data(data)
+    end
   end
 
   describe "get_student_names/1" do

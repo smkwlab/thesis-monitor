@@ -27,6 +27,10 @@ defmodule ThesisMonitor.Commands.Status do
 
     call_output(output, :info, ["After type filtering: #{length(students)} students"])
 
+    # archive 済みは既定で除外（--show-archived で表示）。
+    # 純粋なフィルタのため data_source をモックせず DataSource を直接呼ぶ。
+    students = DataSource.reject_archived(students, opts[:show_archived])
+
     # リポジトリ情報を並列取得
     students_with_info = fetch_repository_info(students, data_source)
     log_token_source(students_with_info, output, deps)

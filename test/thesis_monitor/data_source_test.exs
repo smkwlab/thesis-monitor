@@ -182,9 +182,36 @@ defmodule ThesisMonitor.DataSourceTest do
                false
     end
 
+    test "returns false for an archived entry even when review_flow is true" do
+      student = %Student{review_flow: true, archived_at: "2026-07-20T05:57:05Z"}
+      assert DataSource.needs_latest_branch?(student) == false
+    end
+
     test "returns false for empty student" do
       student = %Student{}
       assert DataSource.needs_latest_branch?(student) == false
+    end
+  end
+
+  describe "reject_archived/2" do
+    test "removes archived students unless requested" do
+      students = [
+        %Student{id: "k21rs001", archived_at: nil},
+        %Student{id: "k21rs002", archived_at: "2026-07-20T05:57:05Z"}
+      ]
+
+      result = DataSource.reject_archived(students, false)
+      assert Enum.map(result, & &1.id) == ["k21rs001"]
+    end
+
+    test "keeps archived students when requested" do
+      students = [
+        %Student{id: "k21rs001", archived_at: nil},
+        %Student{id: "k21rs002", archived_at: "2026-07-20T05:57:05Z"}
+      ]
+
+      result = DataSource.reject_archived(students, true)
+      assert Enum.map(result, & &1.id) == ["k21rs001", "k21rs002"]
     end
   end
 
