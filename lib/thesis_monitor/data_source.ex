@@ -139,11 +139,20 @@ defmodule ThesisMonitor.DataSource do
   @doc """
   最新ブランチの追跡が必要かチェック
 
-  registry の review_flow（draft PR サイクルで運用するリポジトリか）だけで
-  判定する。リポジトリタイプは文書種別であり追跡要否とは独立。
+  registry の review_flow（draft PR サイクルで運用するリポジトリか）で判定する。
+  リポジトリタイプは文書種別であり追跡要否とは独立。archive 済み（archived_at
+  あり）は運用終了のため追跡しない。
   """
-  def needs_latest_branch?(%Student{review_flow: true}), do: true
+  def needs_latest_branch?(%Student{review_flow: true} = student),
+    do: not Student.archived?(student)
+
   def needs_latest_branch?(_), do: false
+
+  @doc """
+  archive 済みの学生を除外する（show_archived が真なら除外しない）
+  """
+  def reject_archived(students, true), do: students
+  def reject_archived(students, _show_archived), do: Enum.reject(students, &Student.archived?/1)
 
   # 学生のソートキーを生成: {年度, 学科優先度, 番号, リポジトリ名}
   # 学籍番号の形式: k{年度2桁}{rs|jk|gjk}{番号}

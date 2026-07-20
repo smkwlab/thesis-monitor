@@ -31,7 +31,9 @@ defmodule ThesisMonitor.Student do
     # 最終更新日時
     :updated_at,
     # 教員の返信待ち PR 件数（Issue #31、--pending-reviews 時のみ設定）
-    :pending_reviews
+    :pending_reviews,
+    # archive 実行日時（registry の archived_at。存在すれば運用終了）
+    :archived_at
   ]
 
   @type t :: %__MODULE__{
@@ -48,7 +50,8 @@ defmodule ThesisMonitor.Student do
           default_branch: String.t() | nil,
           latest_branch: String.t() | nil,
           updated_at: String.t() | nil,
-          pending_reviews: non_neg_integer() | nil
+          pending_reviews: non_neg_integer() | nil,
+          archived_at: String.t() | nil
         }
 
   @doc """
@@ -108,6 +111,12 @@ defmodule ThesisMonitor.Student do
   def repo_status(%__MODULE__{exists: false}), do: "Not Found"
   def repo_status(%__MODULE__{exists: true}), do: "Active"
   def repo_status(_), do: "Unknown"
+
+  @doc """
+  archive 済みか（registry の archived_at を持つか）
+  """
+  def archived?(%__MODULE__{archived_at: at}) when is_binary(at) and at != "", do: true
+  def archived?(_), do: false
 
   @doc """
   名前を指定した文字数で切り詰め

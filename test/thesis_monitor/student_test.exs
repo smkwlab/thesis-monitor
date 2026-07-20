@@ -46,6 +46,23 @@ defmodule ThesisMonitor.StudentTest do
     end
   end
 
+  describe "archived?/1" do
+    test "returns true when archived_at is set" do
+      student = %Student{archived_at: "2026-07-20T05:57:05Z"}
+      assert Student.archived?(student) == true
+    end
+
+    test "returns false when archived_at is nil" do
+      student = %Student{archived_at: nil}
+      assert Student.archived?(student) == false
+    end
+
+    test "returns false when archived_at is an empty string" do
+      student = %Student{archived_at: ""}
+      assert Student.archived?(student) == false
+    end
+  end
+
   describe "protection_icon/1" do
     test "returns check mark for protected" do
       student = %Student{protection_status: :protected}
