@@ -292,7 +292,7 @@ defmodule ThesisMonitor.DataSource.GitHubAPITest do
   end
 
   defp student_commit(date, login, opts \\ []) do
-    parents = for i <- 1..Keyword.get(opts, :parents, 1), do: %{"sha" => "parent#{i}"}
+    parents = for i <- 1..Keyword.get(opts, :parents, 1)//1, do: %{"sha" => "parent#{i}"}
 
     %{
       "commit" => %{"committer" => %{"date" => date}},

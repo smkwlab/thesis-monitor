@@ -208,7 +208,8 @@ defmodule ThesisMonitor.DataSource.GitHubAPI do
   end
 
   @doc false
-  # 全オープン PR ぶんの activity pair をリポジトリ単位に集約して判定する
+  # 全オープン PR ぶんの activity pair をリポジトリ単位に集約して判定する。
+  # オープン PR が無ければ（pairs が空なら）コミットなし扱いで false。
   def repo_pending_review?(pairs) do
     {commit_ats, review_ats} = Enum.unzip(pairs)
 
