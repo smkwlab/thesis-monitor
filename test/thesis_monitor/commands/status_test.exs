@@ -275,6 +275,63 @@ defmodule ThesisMonitor.Commands.StatusTest do
     end
   end
 
+  describe "archived display" do
+    test "shows archived in the Latest Branch column for archived rows" do
+      pid = self()
+
+      students = [
+        %Student{
+          id: "k21rs001",
+          repo_name: "k21rs001-sotsuron",
+          review_flow: true,
+          archived_at: nil
+        },
+        %Student{
+          id: "k20rs005",
+          repo_name: "k20rs005-sotsuron",
+          review_flow: true,
+          archived_at: "2025-03-14T00:00:00Z"
+        }
+      ]
+
+      mock_data_source = %{
+        get_all_students: fn -> {:ok, students} end,
+        filter_students_by_type: fn students, _type -> students end,
+        get_repositories_info: fn students -> Enum.map(students, &{:ok, &1}) end,
+        needs_latest_branch?: fn student -> not Student.archived?(student) end,
+        get_latest_branch: fn _student -> {:ok, "2nd-draft"} end,
+        check_branch_protection: fn student -> {:ok, student} end
+      }
+
+      mock_output = %{
+        info: fn msg -> send(pid, {:info, msg}) end,
+        puts: fn text -> send(pid, {:puts, text}) end,
+        error: fn msg -> send(pid, {:error, msg}) end,
+        warn: fn msg -> send(pid, {:warn, msg}) end,
+        print_table: fn headers, rows, _title, _opts ->
+          send(pid, {:print_table, headers, rows})
+        end
+      }
+
+      deps = %{
+        data_source: mock_data_source,
+        output: mock_output,
+        token_manager: %{get_source: fn -> :config end}
+      }
+
+      Status.run([], [show_archived: true], deps)
+
+      assert_received {:print_table, headers, rows}
+      branch_index = Enum.find_index(headers, &(&1 == "Latest Branch"))
+
+      active_row = Enum.find(rows, &(Enum.at(&1, 0) == "k21rs001"))
+      archived_row = Enum.find(rows, &(Enum.at(&1, 0) == "k20rs005"))
+
+      assert Enum.at(active_row, branch_index) == "2nd-draft"
+      assert Enum.at(archived_row, branch_index) == "archived"
+    end
+  end
+
   describe "error handling" do
     test "handles data source error gracefully" do
       pid = self()
