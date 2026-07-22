@@ -150,7 +150,7 @@ defmodule ThesisMonitor.CLI do
       --verbose           詳細ログを表示
       --show-protection   ブランチ保護状況を表示
       --show-status       リポジトリの存在状態（Active / Not Found）を表示
-      --pending-reviews   教員の返信待ち PR 件数を表示（API 追加取得のためオプトイン）
+      --pending-reviews   教員の返信待ちリポジトリを表示（API 追加取得のためオプトイン）
       --fullname          名前の長い場合も切り詰めずに全文表示
       --no-cache          キャッシュを読まず常に最新を取得（レジストリを書き換えた直後の確認用）
       --show-archived     archive 済みリポジトリも一覧に表示（既定は現役のみ）
@@ -174,7 +174,7 @@ defmodule ThesisMonitor.CLI do
       thesis-monitor status --fullname
       thesis-monitor status --type thesis
       thesis-monitor status --type wr
-      thesis-monitor status --type ise --pending-reviews   # 教員の返信待ち PR 件数
+      thesis-monitor status --type ise --pending-reviews   # 教員の返信待ちリポジトリ
       thesis-monitor status -t              # 時刻順でソート
       thesis-monitor status -t -r           # 時刻順の逆順（古い順）
       thesis-monitor status -r              # 学籍番号の逆順

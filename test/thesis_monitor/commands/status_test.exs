@@ -186,7 +186,7 @@ defmodule ThesisMonitor.Commands.StatusTest do
       assert_received {:info, "After type filtering: 1 students"}
     end
 
-    test "shows a Pending column with the count when --pending-reviews is set (issue #31)" do
+    test "shows a Pending column with yes/no when --pending-reviews is set (issue #46)" do
       pid = self()
 
       students = [
@@ -205,7 +205,7 @@ defmodule ThesisMonitor.Commands.StatusTest do
         needs_latest_branch?: fn _student -> false end,
         get_latest_branch: fn _student -> {:ok, "main"} end,
         check_branch_protection: fn student -> {:ok, student} end,
-        get_pending_review_count: fn _student -> {:ok, 2} end
+        get_pending_review_status: fn _student -> {:ok, true} end
       }
 
       mock_output = %{
@@ -230,7 +230,9 @@ defmodule ThesisMonitor.Commands.StatusTest do
 
       assert_received {:print_table, headers, rows}
       assert "Pending" in headers
-      assert Enum.any?(rows, fn row -> "2" in row end)
+      assert Enum.any?(rows, fn row -> "yes" in row end)
+      assert_received {:puts, "\n" <> summary}
+      assert summary =~ "Pending review: 1 repos"
     end
 
     test "does not fetch pending reviews when the option is absent (issue #31)" do
@@ -245,9 +247,9 @@ defmodule ThesisMonitor.Commands.StatusTest do
         needs_latest_branch?: fn _student -> false end,
         get_latest_branch: fn _student -> {:ok, "main"} end,
         check_branch_protection: fn student -> {:ok, student} end,
-        get_pending_review_count: fn _student ->
+        get_pending_review_status: fn _student ->
           send(pid, :pending_called)
-          {:ok, 0}
+          {:ok, false}
         end
       }
 

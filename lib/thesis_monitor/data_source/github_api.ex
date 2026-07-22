@@ -180,26 +180,41 @@ defmodule ThesisMonitor.DataSource.GitHubAPI do
   end
 
   @doc """
-  オープン PR のうち「教員の返信待ち」の件数を返す（Issue #31）。
+  「教員の返信待ち」かをリポジトリ単位で返す（Issue #31 / #46）。
 
-  各オープン PR について、学生の最新コミット時刻が教員の最新レビュー時刻より後、
-  またはレビューが皆無（かつコミットあり）のものを「返信待ち」として数える。
+  全オープン PR の学生コミット・教員レビューをリポジトリ単位に集約し、
+  学生の最新コミット時刻が教員の最新レビュー時刻より後、またはレビューが
+  皆無（かつコミットあり）なら返信待ちとする。draft PR サイクルでは下位の
+  PR（0th-draft → main など）が開いたまま残り教員の返答は最新 draft PR に
+  移るため、PR 単位で比較すると下位 PR が常に返信待ちに見えてしまう。
   """
-  def get_pending_review_count(%Student{repo_name: repo_name}) do
+  def get_pending_review_status(%Student{repo_name: repo_name}) do
     {:ok, open_prs} = get_pull_requests(repo_name, "open")
-    count = Enum.count(open_prs, &pr_pending_review?(repo_name, &1))
-    {:ok, count}
+    pairs = Enum.map(open_prs, &pr_activity_pair(repo_name, &1))
+    {:ok, repo_pending_review?(pairs)}
   end
 
-  defp pr_pending_review?(repo_name, pr) do
+  # PR の {学生の最新コミット時刻, 教員の最新レビュー時刻} を返す
+  defp pr_activity_pair(repo_name, pr) do
     number = pr["number"]
     student_login = get_in(pr, ["user", "login"])
     {:ok, commits} = get_pr_commits(repo_name, number)
     {:ok, reviews} = get_pr_reviews(repo_name, number)
 
-    pending_review?(
-      latest_commit_at(commits),
+    {
+      latest_student_commit_at(commits, student_login),
       latest_instructor_review_at(reviews, student_login)
+    }
+  end
+
+  @doc false
+  # 全オープン PR ぶんの activity pair をリポジトリ単位に集約して判定する
+  def repo_pending_review?(pairs) do
+    {commit_ats, review_ats} = Enum.unzip(pairs)
+
+    pending_review?(
+      commit_ats |> Enum.reject(&is_nil/1) |> max_or_nil(),
+      review_ats |> Enum.reject(&is_nil/1) |> max_or_nil()
     )
   end
 
@@ -226,18 +241,33 @@ defmodule ThesisMonitor.DataSource.GitHubAPI do
   end
 
   @doc false
-  # PR の commits リストから最新のコミット時刻（ISO8601）を返す。空/非リストなら nil。
+  # PR の commits リストから学生（PR 作者）の最新コミット時刻（ISO8601）を返す。
+  # 該当なし/非リストなら nil。教員の propagate コミットや merge コミットを
+  # 「学生の更新」に数えないよう、PR 作者以外のコミットと merge コミットを除外する
+  # （Issue #46）。author が GitHub アカウントに紐付かないコミットは、学生の
+  # git 設定不備で返信待ちを見逃さないよう学生のものとみなす。
   # committer.date（リポジトリに反映された時刻）を使う。学生が push / rebase した後の
   # 時刻をレビュー時刻と比較したいため、原著時刻の author.date より committer.date が適切。
   # GitHub の日時は "...Z"（UTC・固定長）で辞書順 = 時系列順のため文字列比較で足りる。
-  def latest_commit_at(commits) when is_list(commits) do
+  def latest_student_commit_at(commits, student_login) when is_list(commits) do
     commits
+    |> Enum.reject(&merge_commit?/1)
+    |> Enum.filter(&student_commit?(&1, student_login))
     |> Enum.map(&get_in(&1, ["commit", "committer", "date"]))
     |> Enum.reject(&is_nil/1)
     |> max_or_nil()
   end
 
-  def latest_commit_at(_), do: nil
+  def latest_student_commit_at(_, _), do: nil
+
+  defp merge_commit?(commit), do: length(commit["parents"] || []) > 1
+
+  defp student_commit?(commit, student_login) do
+    case get_in(commit, ["author", "login"]) do
+      nil -> true
+      login -> login == student_login
+    end
+  end
 
   @doc false
   # reviews から、学生本人（student_login）と bot を除いた「教員」レビューの

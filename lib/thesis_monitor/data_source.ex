@@ -115,10 +115,10 @@ defmodule ThesisMonitor.DataSource do
   end
 
   @doc """
-  オープン PR のうち教員の返信待ちの件数を取得（Issue #31）
+  教員の返信待ちかをリポジトリ単位で取得（Issue #31 / #46）
   """
-  def get_pending_review_count(%Student{} = student) do
-    GitHubAPI.get_pending_review_count(student)
+  def get_pending_review_status(%Student{} = student) do
+    GitHubAPI.get_pending_review_status(student)
   end
 
   @doc """
