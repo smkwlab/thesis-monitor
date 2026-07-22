@@ -298,7 +298,9 @@ defmodule ThesisMonitor.Commands.StatusTest do
         get_all_students: fn -> {:ok, students} end,
         filter_students_by_type: fn students, _type -> students end,
         get_repositories_info: fn students -> Enum.map(students, &{:ok, &1}) end,
-        needs_latest_branch?: fn student -> not Student.archived?(student) end,
+        needs_latest_branch?: fn student ->
+          student.review_flow && not Student.archived?(student)
+        end,
         get_latest_branch: fn _student -> {:ok, "2nd-draft"} end,
         check_branch_protection: fn student -> {:ok, student} end
       }
@@ -329,6 +331,56 @@ defmodule ThesisMonitor.Commands.StatusTest do
 
       assert Enum.at(active_row, branch_index) == "2nd-draft"
       assert Enum.at(archived_row, branch_index) == "archived"
+    end
+
+    test "treats an empty archived_at as not archived" do
+      pid = self()
+
+      students = [
+        %Student{
+          id: "k99rs001",
+          repo_name: "k99rs001-sotsuron",
+          review_flow: false,
+          archived_at: ""
+        }
+      ]
+
+      mock_data_source = %{
+        get_all_students: fn -> {:ok, students} end,
+        filter_students_by_type: fn students, _type -> students end,
+        get_repositories_info: fn students -> Enum.map(students, &{:ok, &1}) end,
+        needs_latest_branch?: fn student ->
+          student.review_flow && not Student.archived?(student)
+        end,
+        get_latest_branch: fn _student -> {:ok, "2nd-draft"} end,
+        check_branch_protection: fn student -> {:ok, student} end
+      }
+
+      mock_output = %{
+        info: fn msg -> send(pid, {:info, msg}) end,
+        puts: fn text -> send(pid, {:puts, text}) end,
+        error: fn msg -> send(pid, {:error, msg}) end,
+        warn: fn msg -> send(pid, {:warn, msg}) end,
+        print_table: fn headers, rows, _title, _opts ->
+          send(pid, {:print_table, headers, rows})
+        end
+      }
+
+      deps = %{
+        data_source: mock_data_source,
+        output: mock_output,
+        token_manager: %{get_source: fn -> :config end}
+      }
+
+      Status.run([], [show_archived: true], deps)
+
+      assert_received {:print_table, headers, rows}
+      branch_index = Enum.find_index(headers, &(&1 == "Latest Branch"))
+      row = Enum.find(rows, &(Enum.at(&1, 0) == "k99rs001"))
+
+      # archived_at: "" は archived 扱いしない（Student.archived?/1 と同じ境界）。
+      # review_flow: false で latest_branch は nil のままなので N/A になる。
+      assert Enum.at(row, branch_index) == "N/A"
     end
   end
 
