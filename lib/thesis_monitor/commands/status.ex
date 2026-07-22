@@ -360,6 +360,11 @@ defmodule ThesisMonitor.Commands.Status do
   defp format_type("sotsuron"), do: "Sotsuron"
   defp format_type(type), do: type
 
+  # archive 済みは追跡対象外で latest_branch が nil のままになる。リポジトリ 404 や
+  # review_flow: false の N/A と区別できるよう、archived と明示する（--show-archived 時）。
+  defp format_latest_branch(%Student{archived_at: at}) when is_binary(at) and at != "",
+    do: "archived"
+
   defp format_latest_branch(%Student{latest_branch: nil}), do: "N/A"
   defp format_latest_branch(%Student{latest_branch: branch}), do: branch
 
