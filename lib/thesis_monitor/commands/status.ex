@@ -382,8 +382,8 @@ defmodule ThesisMonitor.Commands.Status do
         students
       end
 
-    # -r オプションで逆順
-    if opts[:r] do
+    # -r / --reverse オプションで逆順
+    if opts[:reverse] do
       Enum.reverse(sorted)
     else
       sorted

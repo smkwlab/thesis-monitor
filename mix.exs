@@ -5,7 +5,7 @@ defmodule ThesisMonitor.MixProject do
     [
       app: :thesis_monitor,
       version: "0.1.0",
-      elixir: "~> 1.14",
+      elixir: "~> 1.17",
       start_permanent: Mix.env() == :prod,
       escript: [main_module: ThesisMonitor.CLI, name: "thesis-monitor"],
       test_coverage: [
@@ -30,7 +30,7 @@ defmodule ThesisMonitor.MixProject do
       dialyzer: [
         plt_add_apps: [:mix],
         flags: [:error_handling, :underspecs],
-        ignore_warnings: "dialyzer.ignore-warnings"
+        ignore_warnings: "dialyzer.ignore-warnings.exs"
       ],
       deps: deps()
     ]
@@ -44,6 +44,7 @@ defmodule ThesisMonitor.MixProject do
 
   defp deps do
     [
+      {:tool_kit, github: "smkwlab/elixir-tool-kit", tag: "v0.1.1"},
       {:jason, "~> 1.4"},
       {:req, "~> 0.4"},
       {:yaml_elixir, "~> 2.9"},
