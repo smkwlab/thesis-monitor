@@ -30,8 +30,8 @@ defmodule ThesisMonitor.Student do
     :latest_branch,
     # 最終更新日時
     :updated_at,
-    # 教員の返信待ち PR 件数（Issue #31、--pending-reviews 時のみ設定）
-    :pending_reviews,
+    # 教員の返信待ちか（Issue #31 / #46、--pending-reviews 時のみ設定）
+    :pending_review,
     # archive 実行日時（registry の archived_at。存在すれば運用終了）
     :archived_at
   ]
@@ -50,7 +50,7 @@ defmodule ThesisMonitor.Student do
           default_branch: String.t() | nil,
           latest_branch: String.t() | nil,
           updated_at: String.t() | nil,
-          pending_reviews: non_neg_integer() | nil,
+          pending_review: boolean() | nil,
           archived_at: String.t() | nil
         }
 

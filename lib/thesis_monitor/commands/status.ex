@@ -97,7 +97,7 @@ defmodule ThesisMonitor.Commands.Status do
     # 最新ブランチ情報を取得（デフォルトで取得）
     students = fetch_latest_branches_for_students(students, data_source)
 
-    # 教員の返信待ち PR 件数（オプトイン。PR ごとに追加 API を叩くため）
+    # 教員の返信待ち（オプトイン。PR ごとに追加 API を叩くため）
     if opts[:pending_reviews] do
       fetch_pending_reviews_for_students(students, data_source)
     else
@@ -108,7 +108,7 @@ defmodule ThesisMonitor.Commands.Status do
   defp fetch_pending_reviews_for_students(students, data_source) do
     # on_timeout: :kill_task によりタイムアウトは {:exit, _} で返る。async_stream は
     # 要素数を変えないため元 students と Enum.zip で 1:1 対応でき、失敗時も学生を
-    # 一覧から消さず元のまま残せる（pending_reviews: nil → "N/A"）。クロージャで
+    # 一覧から消さず元のまま残せる（pending_review: nil → "N/A"）。クロージャで
     # student を捕捉する書き方では :exit 時に元 student を復元できないため zip を採る。
     students
     |> Task.async_stream(&fetch_pending_reviews(&1, data_source),
@@ -125,8 +125,8 @@ defmodule ThesisMonitor.Commands.Status do
   end
 
   defp fetch_pending_reviews(student, data_source) do
-    case call_data_source(data_source, :get_pending_review_count, [student]) do
-      {:ok, count} -> %{student | pending_reviews: count}
+    case call_data_source(data_source, :get_pending_review_status, [student]) do
+      {:ok, pending} -> %{student | pending_review: pending}
       _ -> student
     end
   end
@@ -240,7 +240,7 @@ defmodule ThesisMonitor.Commands.Status do
           if opts[:show_protection], do: [Student.protection_icon(student)], else: []
 
         pending_row =
-          if opts[:pending_reviews], do: [format_pending(student.pending_reviews)], else: []
+          if opts[:pending_reviews], do: [format_pending(student.pending_review)], else: []
 
         update_row = [Student.format_last_update(student)]
 
@@ -284,7 +284,7 @@ defmodule ThesisMonitor.Commands.Status do
           end
 
         if opts[:pending_reviews] do
-          Map.put(base_data, :pending_reviews, student.pending_reviews)
+          Map.put(base_data, :pending_review, student.pending_review)
         else
           base_data
         end
@@ -307,7 +307,7 @@ defmodule ThesisMonitor.Commands.Status do
       csv_optional(",type", opts[:long]) <>
       csv_optional(",status", opts[:show_status]) <>
       csv_optional(",protection", opts[:show_protection]) <>
-      csv_optional(",pending_reviews", opts[:pending_reviews]) <>
+      csv_optional(",pending_review", opts[:pending_reviews]) <>
       ",last_update"
   end
 
@@ -316,7 +316,7 @@ defmodule ThesisMonitor.Commands.Status do
       csv_optional(",#{student.type || "N/A"}", opts[:long]) <>
       csv_optional(",#{Student.repo_status(student)}", opts[:show_status]) <>
       csv_optional(",#{student.protection_status}", opts[:show_protection]) <>
-      csv_optional(",#{format_pending(student.pending_reviews)}", opts[:pending_reviews]) <>
+      csv_optional(",#{format_pending(student.pending_review)}", opts[:pending_reviews]) <>
       ",#{Student.format_last_update(student)}"
   end
 
@@ -338,9 +338,8 @@ defmodule ThesisMonitor.Commands.Status do
 
     pending_summary =
       if opts[:pending_reviews] do
-        total_pending = students |> Enum.map(&(&1.pending_reviews || 0)) |> Enum.sum()
-        repos_with_pending = Enum.count(students, &((&1.pending_reviews || 0) > 0))
-        ", Pending reviews: #{total_pending} in #{repos_with_pending} repos"
+        pending_repos = Enum.count(students, &(&1.pending_review == true))
+        ", Pending review: #{pending_repos} repos"
       else
         ""
       end
@@ -369,7 +368,8 @@ defmodule ThesisMonitor.Commands.Status do
   defp format_latest_branch(%Student{latest_branch: branch}), do: branch
 
   defp format_pending(nil), do: "N/A"
-  defp format_pending(count), do: Integer.to_string(count)
+  defp format_pending(true), do: "yes"
+  defp format_pending(false), do: "-"
 
   # ソート処理
   defp sort_students(students, opts) do

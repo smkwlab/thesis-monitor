@@ -137,23 +137,95 @@ defmodule ThesisMonitor.DataSource.GitHubAPITest do
     end
   end
 
-  describe "latest_commit_at/1 (issue #31)" do
-    test "returns the newest committer date" do
+  describe "latest_student_commit_at/2 (issue #46)" do
+    test "returns the newest committer date among the student's commits" do
       commits = [
-        %{"commit" => %{"committer" => %{"date" => "2026-07-08T06:00:00Z"}}},
-        %{"commit" => %{"committer" => %{"date" => "2026-07-09T10:00:00Z"}}},
-        %{"commit" => %{"committer" => %{"date" => "2026-07-08T23:00:00Z"}}}
+        student_commit("2026-07-08T06:00:00Z", "k24rs124"),
+        student_commit("2026-07-09T10:00:00Z", "k24rs124"),
+        student_commit("2026-07-08T23:00:00Z", "k24rs124")
       ]
 
-      assert GitHubAPI.latest_commit_at(commits) == "2026-07-09T10:00:00Z"
+      assert GitHubAPI.latest_student_commit_at(commits, "k24rs124") == "2026-07-09T10:00:00Z"
+    end
+
+    test "excludes commits authored by someone other than the student" do
+      # 教員による workflow propagate コミットを「学生の更新」に数えない
+      commits = [
+        student_commit("2026-07-08T06:00:00Z", "k24rs124"),
+        student_commit("2026-07-15T06:23:24Z", "toshi0806")
+      ]
+
+      assert GitHubAPI.latest_student_commit_at(commits, "k24rs124") == "2026-07-08T06:00:00Z"
+    end
+
+    test "excludes merge commits even when the student is the author" do
+      commits = [
+        student_commit("2026-07-08T06:00:00Z", "k24rs124"),
+        student_commit("2026-07-15T07:00:00Z", "k24rs124", parents: 2)
+      ]
+
+      assert GitHubAPI.latest_student_commit_at(commits, "k24rs124") == "2026-07-08T06:00:00Z"
+    end
+
+    test "keeps commits whose author is not linked to a GitHub account" do
+      # 学生の git 設定不備(メール不一致)で author が紐付かないコミットを
+      # 除外すると返信待ちを見逃すため、学生のものとみなす
+      commits = [
+        %{
+          "commit" => %{"committer" => %{"date" => "2026-07-09T10:00:00Z"}},
+          "author" => nil,
+          "parents" => [%{"sha" => "a"}]
+        }
+      ]
+
+      assert GitHubAPI.latest_student_commit_at(commits, "k24rs124") == "2026-07-09T10:00:00Z"
     end
 
     test "returns nil for an empty list" do
-      assert GitHubAPI.latest_commit_at([]) == nil
+      assert GitHubAPI.latest_student_commit_at([], "k24rs124") == nil
     end
 
     test "returns nil for a non-list" do
-      assert GitHubAPI.latest_commit_at(nil) == nil
+      assert GitHubAPI.latest_student_commit_at(nil, "k24rs124") == nil
+    end
+  end
+
+  describe "repo_pending_review?/1 (issue #46)" do
+    test "false when the newest draft PR carries the latest instructor review" do
+      # k24rs124 の誤検出ケース: 下位 PR(0th/1st-draft)は開いたまま残り、
+      # 教員の返答は最新 draft PR に移る。repo 単位で集約すれば、下位 PR の
+      # 古いレビュー時刻に引きずられず pending でないと判定できる
+      pairs = [
+        # 0th-draft PR: 最終レビュー 07-11、その後コミットあり
+        {"2026-07-15T06:23:24Z", "2026-07-11T02:39:28Z"},
+        # 1st-draft PR: 最終レビュー 07-22 05:32、その後コミットあり
+        {"2026-07-22T05:49:00Z", "2026-07-22T05:32:59Z"},
+        # 2nd-draft PR(最新): 同じコミットへ教員が 06:15 に返答済み
+        {"2026-07-22T05:49:00Z", "2026-07-22T06:15:27Z"}
+      ]
+
+      assert GitHubAPI.repo_pending_review?(pairs) == false
+    end
+
+    test "true when the latest student commit is newer than every instructor review" do
+      pairs = [
+        {"2026-07-15T06:23:24Z", "2026-07-11T02:39:28Z"},
+        {"2026-07-22T06:30:00Z", "2026-07-22T06:15:27Z"}
+      ]
+
+      assert GitHubAPI.repo_pending_review?(pairs) == true
+    end
+
+    test "true when the student committed but no instructor has reviewed any PR" do
+      assert GitHubAPI.repo_pending_review?([{"2026-07-22T05:49:00Z", nil}]) == true
+    end
+
+    test "false when there are no open PRs" do
+      assert GitHubAPI.repo_pending_review?([]) == false
+    end
+
+    test "false when open PRs have no student commits" do
+      assert GitHubAPI.repo_pending_review?([{nil, nil}]) == false
     end
   end
 
@@ -217,5 +289,15 @@ defmodule ThesisMonitor.DataSource.GitHubAPITest do
       assert GitHubAPI.pending_review?(nil, "2026-07-09T00:00:00Z") == false
       assert GitHubAPI.pending_review?(nil, nil) == false
     end
+  end
+
+  defp student_commit(date, login, opts \\ []) do
+    parents = for i <- 1..Keyword.get(opts, :parents, 1)//1, do: %{"sha" => "parent#{i}"}
+
+    %{
+      "commit" => %{"committer" => %{"date" => date}},
+      "author" => %{"login" => login},
+      "parents" => parents
+    }
   end
 end
