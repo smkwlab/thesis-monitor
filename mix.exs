@@ -44,7 +44,7 @@ defmodule ThesisMonitor.MixProject do
 
   defp deps do
     [
-      {:tool_kit, github: "smkwlab/elixir-tool-kit", tag: "v0.2.0"},
+      {:tool_kit, github: "smkwlab/elixir-tool-kit", tag: "v0.3.0"},
       {:jason, "~> 1.4"},
       {:req, "~> 0.4"},
       {:yaml_elixir, "~> 2.9"},
