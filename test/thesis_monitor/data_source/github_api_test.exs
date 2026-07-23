@@ -47,7 +47,14 @@ defmodule ThesisMonitor.DataSource.GitHubAPITest do
         File.rm(config_path)
 
         # Config Agent を明示停止し、この temp config を次テストへ持ち越さない
-        if pid = Process.whereis(ThesisMonitor.Config), do: Agent.stop(pid)
+        # whereis と stop の間に Agent が死ぬレースがあるため :exit は握りつぶす
+        if pid = Process.whereis(ThesisMonitor.Config) do
+          try do
+            Agent.stop(pid)
+          catch
+            :exit, _ -> :ok
+          end
+        end
       end)
 
       {:ok, _} = ThesisMonitor.Config.load(config_path)
@@ -66,7 +73,14 @@ defmodule ThesisMonitor.DataSource.GitHubAPITest do
         File.rm(config_path)
 
         # Config Agent を明示停止し、この temp config を次テストへ持ち越さない
-        if pid = Process.whereis(ThesisMonitor.Config), do: Agent.stop(pid)
+        # whereis と stop の間に Agent が死ぬレースがあるため :exit は握りつぶす
+        if pid = Process.whereis(ThesisMonitor.Config) do
+          try do
+            Agent.stop(pid)
+          catch
+            :exit, _ -> :ok
+          end
+        end
       end)
 
       {:ok, _} = ThesisMonitor.Config.load(config_path)
