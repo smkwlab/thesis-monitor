@@ -171,6 +171,48 @@ defmodule ThesisMonitor.OutputTest do
       assert result =~ "Alice"
     end
 
+    test "print_table/2 pads columns and joins them with a single space" do
+      headers = ["Name", "Status"]
+      rows = [["Al", "OK"]]
+
+      result =
+        capture_io(fn ->
+          Output.print_table(headers, rows)
+        end)
+
+      # Name 列は min 4、その他の列は min 8、gap は半角スペース 1
+      assert result =~ "Name Status  "
+      assert result =~ "---- --------"
+      assert result =~ "Al   OK      "
+    end
+
+    test "print_table/2 truncates Name column at display width 16" do
+      headers = ["Name", "Status"]
+      long_name = "very-long-repository-name"
+      rows = [[long_name, "Active"]]
+
+      result =
+        capture_io(fn ->
+          Output.print_table(headers, rows)
+        end)
+
+      assert result =~ "very-long-rep..."
+      refute result =~ long_name
+    end
+
+    test "print_table/4 with :long format uses tab-separated output" do
+      headers = ["Name", "Status"]
+      rows = [["Alice", "Active"]]
+
+      result =
+        capture_io(fn ->
+          Output.print_table(headers, rows, nil, format: :long)
+        end)
+
+      assert result =~ "Name\tStatus"
+      assert result =~ "Alice\tActive"
+    end
+
     test "print_table/2 with empty rows" do
       headers = ["Name", "Status"]
       rows = []
