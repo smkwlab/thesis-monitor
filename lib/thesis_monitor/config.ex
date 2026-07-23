@@ -5,6 +5,8 @@ defmodule ThesisMonitor.Config do
 
   use Agent
 
+  alias ToolKit.Config.Layers
+
   @default_config %{
     github_token: System.get_env("GITHUB_TOKEN"),
     # 既定 org は持たない（issue #28）。未設定のまま学生リポジトリ / レジストリを
@@ -24,30 +26,26 @@ defmodule ThesisMonitor.Config do
     timeout: 10_000
   }
 
+  # 環境変数レイヤ(THESIS_MONITOR_*)の spec。ファイルより後勝ち
+  @env_spec %{
+    github_token: :string,
+    github_org: :string,
+    registry_repo: :string,
+    cache_dir: :string,
+    cache_ttl: :integer,
+    csv_path: :string,
+    max_concurrency: :integer,
+    timeout: :integer
+  }
+
   def start_link(_opts) do
     Agent.start_link(fn -> @default_config end, name: __MODULE__)
   end
 
   def load(config_path \\ nil) do
-    user_config_path = default_config_path()
-
     config =
-      cond do
-        config_path && File.exists?(config_path) ->
-          load_from_file(config_path)
-
-        File.exists?("./config/thesis-monitor.yml") ->
-          load_from_file("./config/thesis-monitor.yml")
-
-        File.exists?(user_config_path) ->
-          load_from_file(user_config_path)
-
-        true ->
-          @default_config
-      end
-
-    config =
-      config
+      config_path
+      |> resolve_layers()
       |> apply_github_org_convention()
       |> apply_csv_convention()
 
@@ -86,13 +84,7 @@ defmodule ThesisMonitor.Config do
   def apply_csv_convention(config, home \\ System.user_home())
 
   def apply_csv_convention(%{csv_path: csv} = config, home) when csv in [nil, ""] do
-    conventional = safe_conventional_csv_path(Map.get(config, :github_org), home)
-
-    if conventional && File.exists?(conventional) do
-      Map.put(config, :csv_path, conventional)
-    else
-      Map.put(config, :csv_path, nil)
-    end
+    Map.put(config, :csv_path, Layers.find_conventional_csv(Map.get(config, :github_org), home))
   end
 
   def apply_csv_convention(config, _home), do: config
@@ -104,20 +96,12 @@ defmodule ThesisMonitor.Config do
   # load の内部実装だが、owner 導出を直接検証するテストのために public にしている
   # （同モジュールの apply_csv_convention と同じ慣習）。
   @doc false
-  def apply_github_org_convention(%{github_org: org} = config) when org in [nil, ""] do
-    Map.put(config, :github_org, owner_from_registry_repo(Map.get(config, :registry_repo)))
+  def apply_github_org_convention(config) do
+    derived =
+      Layers.derive_github_org(Map.get(config, :github_org), Map.get(config, :registry_repo))
+
+    Map.put(config, :github_org, derived)
   end
-
-  def apply_github_org_convention(config), do: config
-
-  defp owner_from_registry_repo(registry_repo) when is_binary(registry_repo) do
-    case String.split(registry_repo, "/") do
-      [owner, _repo] when owner != "" -> owner
-      _ -> nil
-    end
-  end
-
-  defp owner_from_registry_repo(_registry_repo), do: nil
 
   @github_org_error """
   github_org が設定されていません。config 無しで実行すると他 org の \
@@ -141,20 +125,12 @@ defmodule ThesisMonitor.Config do
     raise RuntimeError, @github_org_error
   end
 
-  # github_org / home が使えない環境（未設定・HOME なし）では規約導出をスキップ
-  defp safe_conventional_csv_path(github_org, home)
-       when is_binary(github_org) and github_org != "" and is_binary(home) do
-    conventional_csv_path(github_org, home)
-  end
-
-  defp safe_conventional_csv_path(_github_org, _home), do: nil
-
   @doc """
   組織の名簿 CSV の規約パスを返す
   """
   def conventional_csv_path(github_org, home \\ System.user_home!())
       when is_binary(github_org) and is_binary(home) do
-    Path.join([home, ".config", github_org, "students.csv"])
+    Layers.conventional_csv_path(github_org, home)
   end
 
   @doc """
@@ -162,7 +138,7 @@ defmodule ThesisMonitor.Config do
   旧 ~/.thesis-monitor.yml は読み込まない — 公開前に fallback を持たない決定）
   """
   def default_config_path(home \\ System.user_home!()) when is_binary(home) do
-    Path.join([home, ".config", "thesis-monitor", "config.yml"])
+    Layers.default_config_path("thesis-monitor", home)
   end
 
   # Agent 未起動（escript の init 経路など Config.load 前の呼び出し）は
@@ -191,23 +167,43 @@ defmodule ThesisMonitor.Config do
   # パス系キーはチルダを展開
   defp expand_path_value(key, value) do
     case {key, value} do
-      {:cache_dir, path} when is_binary(path) -> Path.expand(path)
-      {:csv_path, path} when is_binary(path) -> Path.expand(path)
+      {:cache_dir, path} when is_binary(path) -> Layers.expand_home(path)
+      {:csv_path, path} when is_binary(path) -> Layers.expand_home(path)
       _ -> value
     end
   end
 
-  # 旧キー（data_dir / student_csv / registry_dir）の互換は持たない
-  # （公開前に後方互換を全廃する決定、issue #20）
-  defp load_from_file(path) do
-    case YamlElixir.read_from_file(path) do
-      {:ok, yaml} ->
-        yaml
-        |> Enum.map(fn {k, v} -> {String.to_atom(k), v} end)
-        |> Enum.into(@default_config)
+  # defaults ⊕ ファイル ⊕ 環境変数(THESIS_MONITOR_*)を後勝ちでマージする。
+  # 探索順(--config → ./config/thesis-monitor.yml → ~/.config/... → defaults)は
+  # first_existing で解決する(明示パスが不存在なら次の候補へ、従来と同じ)
+  defp resolve_layers(config_path) do
+    file_path =
+      Layers.first_existing([
+        config_path,
+        "./config/thesis-monitor.yml",
+        default_config_path()
+      ])
 
-      _ ->
-        @default_config
+    Layers.merge([@default_config, file_layer(file_path), env_layer()])
+  end
+
+  defp file_layer(nil), do: %{}
+
+  # 旧キー（data_dir / student_csv / registry_dir）の互換は持たない
+  # （公開前に後方互換を全廃する決定、issue #20）。defaults に無いキーも
+  # 従来通り atom 化して取り込む。パース失敗は defaults へのフォールバック
+  defp file_layer(path) do
+    case Layers.load_file(path) do
+      {:ok, raw} -> Map.new(raw, fn {k, v} -> {String.to_atom(k), v} end)
+      {:error, {:parse_error, _path}} -> %{}
+    end
+  end
+
+  # 変換失敗（不正な integer 等）はその変数を無視して他レイヤの値を使う
+  defp env_layer do
+    case Layers.read_env("THESIS_MONITOR", @env_spec) do
+      {:ok, env} -> env
+      {:error, _message} -> %{}
     end
   end
 end

@@ -488,6 +488,40 @@ defmodule ThesisMonitor.ConfigExtendedTest do
     end
   end
 
+  describe "environment variable layer (THESIS_MONITOR_*)" do
+    defp put_test_env(var, value) do
+      System.put_env(var, value)
+      on_exit(fn -> System.delete_env(var) end)
+    end
+
+    test "THESIS_MONITOR_GITHUB_ORG overrides the file value" do
+      path = write_tmp_config("github_org: fileorg\n")
+      put_test_env("THESIS_MONITOR_GITHUB_ORG", "envorg")
+
+      {:ok, _pid} = Config.load(path)
+
+      assert Config.get(:github_org) == "envorg"
+    end
+
+    test "THESIS_MONITOR_CACHE_TTL is converted to integer" do
+      path = write_tmp_config("github_org: envttl_org\n")
+      put_test_env("THESIS_MONITOR_CACHE_TTL", "60")
+
+      {:ok, _pid} = Config.load(path)
+
+      assert Config.get(:cache_ttl) == 60
+    end
+
+    test "an invalid THESIS_MONITOR_* value falls back to the other layers" do
+      path = write_tmp_config("cache_ttl: 900\n")
+      put_test_env("THESIS_MONITOR_CACHE_TTL", "not-a-number")
+
+      {:ok, _pid} = Config.load(path)
+
+      assert Config.get(:cache_ttl) == 900
+    end
+  end
+
   describe "environment variable handling" do
     test "loads github_token from environment" do
       # This tests the default config behavior
