@@ -4,8 +4,10 @@ defmodule ThesisMonitor.DataSource.GitHubAPI do
   """
 
   alias ThesisMonitor.Student
+  alias ToolKit.GitHub.Client
 
   @base_url "https://api.github.com"
+  @user_agent "ThesisMonitor/1.0"
 
   @doc """
   リポジトリ API URL を構築（組織名は Config の github_org から取得）
@@ -21,9 +23,7 @@ defmodule ThesisMonitor.DataSource.GitHubAPI do
   リポジトリ情報を取得
   """
   def get_repository_info(%Student{repo_name: repo_name} = student) do
-    url = build_repo_url(repo_name)
-
-    case make_request(url) do
+    case Client.get_repository("#{org()}/#{repo_name}", client_opts()) do
       {:ok, data} ->
         updated_student = %{
           student
@@ -35,7 +35,7 @@ defmodule ThesisMonitor.DataSource.GitHubAPI do
 
         {:ok, updated_student}
 
-      {:error, 404} ->
+      {:error, :not_found} ->
         {:ok, %{student | exists: false}}
 
       {:error, reason} ->
@@ -47,9 +47,7 @@ defmodule ThesisMonitor.DataSource.GitHubAPI do
   最新のブランチを取得（PR用ブランチを優先）
   """
   def get_latest_branch(%Student{repo_name: repo_name} = student) do
-    url = build_repo_url(repo_name) <> "/branches"
-
-    case make_request(url) do
+    case Client.list_branches("#{org()}/#{repo_name}", client_opts()) do
       {:ok, branches} when is_list(branches) ->
         # ブランチ一覧から最新のブランチを選択
         # initialとreview-branchを除外し、PR用のブランチを優先
@@ -73,7 +71,7 @@ defmodule ThesisMonitor.DataSource.GitHubAPI do
           {:ok, student.default_branch || "main"}
         end
 
-      {:error, 404} ->
+      {:error, :not_found} ->
         # リポジトリが存在しない場合はブランチ名を捏造しない
         {:ok, nil}
 
@@ -118,13 +116,13 @@ defmodule ThesisMonitor.DataSource.GitHubAPI do
   ブランチ保護設定を確認
   """
   def check_branch_protection(%Student{repo_name: repo_name, default_branch: branch} = student) do
-    url = build_repo_url(repo_name) <> "/branches/#{branch}/protection"
+    path = "/repos/#{org()}/#{repo_name}/branches/#{branch}/protection"
 
-    case make_request(url) do
+    case Client.get(path, client_opts()) do
       {:ok, _data} ->
         {:ok, %{student | protection_status: :protected}}
 
-      {:error, 404} ->
+      {:error, :not_found} ->
         {:ok, %{student | protection_status: :unprotected}}
 
       {:error, reason} ->
@@ -141,9 +139,7 @@ defmodule ThesisMonitor.DataSource.GitHubAPI do
       |> DateTime.add(-days * 24 * 60 * 60, :second)
       |> DateTime.to_iso8601()
 
-    url = build_repo_url(repo_name) <> "/commits?since=#{since}"
-
-    case make_request(url) do
+    case Client.list_commits("#{org()}/#{repo_name}", [since: since] ++ client_opts()) do
       {:ok, commits} when is_list(commits) ->
         formatted_commits =
           commits
@@ -222,9 +218,9 @@ defmodule ThesisMonitor.DataSource.GitHubAPI do
   defp get_pr_commits(repo_name, number) do
     # per_page=100（GitHub の上限）まで取得。ISE レポートで 1 PR に 100 コミット超は
     # 非現実的なためページネーションは追わない。
-    url = build_repo_url(repo_name) <> "/pulls/#{number}/commits?per_page=100"
+    path = "/repos/#{org()}/#{repo_name}/pulls/#{number}/commits"
 
-    case make_request(url) do
+    case Client.get(path, [params: [per_page: 100]] ++ client_opts()) do
       {:ok, list} when is_list(list) -> {:ok, list}
       _ -> {:ok, []}
     end
@@ -233,9 +229,14 @@ defmodule ThesisMonitor.DataSource.GitHubAPI do
   defp get_pr_reviews(repo_name, number) do
     # per_page=100（GitHub の上限）まで取得。1 PR に 100 レビュー超は非現実的なため
     # ページネーションは追わない。
-    url = build_repo_url(repo_name) <> "/pulls/#{number}/reviews?per_page=100"
+    result =
+      Client.list_pull_request_reviews(
+        "#{org()}/#{repo_name}",
+        number,
+        [per_page: 100] ++ client_opts()
+      )
 
-    case make_request(url) do
+    case result do
       {:ok, list} when is_list(list) -> {:ok, list}
       _ -> {:ok, []}
     end
@@ -300,25 +301,19 @@ defmodule ThesisMonitor.DataSource.GitHubAPI do
   defp max_or_nil(list), do: Enum.max(list)
 
   defp get_pull_requests(repo_name, state, opts \\ []) do
-    url = build_repo_url(repo_name) <> "/pulls?state=#{state}"
+    params = if opts[:draft], do: [state: state, draft: true], else: [state: state]
+    path = "/repos/#{org()}/#{repo_name}/pulls"
 
-    url =
-      if opts[:draft] do
-        url <> "&draft=true"
-      else
-        url
-      end
-
-    case make_request(url) do
+    case Client.get(path, [params: params] ++ client_opts()) do
       {:ok, prs} when is_list(prs) -> {:ok, prs}
       _ -> {:ok, []}
     end
   end
 
   defp get_issues(repo_name, state) do
-    url = build_repo_url(repo_name) <> "/issues?state=#{state}"
+    path = "/repos/#{org()}/#{repo_name}/issues"
 
-    case make_request(url) do
+    case Client.get(path, [params: [state: state]] ++ client_opts()) do
       {:ok, issues} when is_list(issues) ->
         # PRも含まれるので除外
         issues = Enum.reject(issues, &Map.has_key?(&1, "pull_request"))
@@ -346,12 +341,15 @@ defmodule ThesisMonitor.DataSource.GitHubAPI do
   誤解釈すると学生ゼロと沈黙するため、呼び出し側で必ず区別すること。
   """
   def get_file_contents(repo_full_name, path) do
-    url = "#{@base_url}/repos/#{repo_full_name}/contents/#{path}"
-    handle_contents_result(make_request(url))
+    repo_full_name
+    |> Client.get_file_contents(path, client_opts())
+    |> handle_contents_result()
   end
 
   @doc false
-  # make_request の結果を contents API の意味論に写す（テスト可能な純粋関数）
+  # リクエスト結果を contents API の意味論に写す（テスト可能な純粋関数）。
+  # Client は 404 / 401 / 403 を分類済み（:not_found / :unauthorized）で返すが、
+  # 生のステータス整数を受けた場合も同じ意味論に写す
   def handle_contents_result({:ok, body}), do: decode_contents_response(body)
   def handle_contents_result({:error, 404}), do: {:error, :not_found}
 
@@ -377,28 +375,14 @@ defmodule ThesisMonitor.DataSource.GitHubAPI do
 
   def decode_contents_response(_body), do: {:error, :invalid_content}
 
-  defp make_request(url) do
-    headers = [
-      {"Accept", "application/vnd.github.v3+json"},
-      {"Authorization", "Bearer #{get_token()}"},
-      {"User-Agent", "ThesisMonitor/1.0"}
+  # Client に渡す共通オプション。token はプロバイダ注入で TokenManager に委ね、
+  # 現行の優先順位（config > GITHUB_TOKEN > gh auth token）を維持する。
+  # 並列実行時でも TokenManager がキャッシュを使用するため、
+  # 実際に gh auth token が実行されるのは初回のみ
+  defp client_opts do
+    [
+      token_provider: fn -> {:ok, ThesisMonitor.TokenManager.get_token()} end,
+      user_agent: @user_agent
     ]
-
-    case Req.get(url, headers: headers, retry: false) do
-      {:ok, %{status: 200, body: body}} ->
-        {:ok, body}
-
-      {:ok, %{status: status}} ->
-        {:error, status}
-
-      {:error, reason} ->
-        {:error, reason}
-    end
-  end
-
-  defp get_token do
-    # 並列実行時でもTokenManagerがキャッシュを使用するため、
-    # 実際にgh auth tokenが実行されるのは初回のみ
-    ThesisMonitor.TokenManager.get_token()
   end
 end
