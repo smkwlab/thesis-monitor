@@ -50,7 +50,7 @@ defmodule ThesisMonitor.CLI.Spec do
     format: %{type: :string, alias: nil, values: @output_formats, doc: "出力形式"},
     type: %{
       type: :string,
-      alias: nil,
+      alias: :T,
       values: @type_filters,
       doc: "リポジトリタイプで絞り込み（thesis は sotsuron∪master、all は全件）"
     },
@@ -77,7 +77,7 @@ defmodule ThesisMonitor.CLI.Spec do
     },
     show_archived: %{
       type: :boolean,
-      alias: nil,
+      alias: :a,
       values: nil,
       doc: "archive 済みリポジトリも一覧に表示（既定は現役のみ）"
     },
@@ -125,10 +125,10 @@ defmodule ThesisMonitor.CLI.Spec do
       examples: ["init", "init --test", "init --org myorg --registry-repo myorg/my-registry"]
     },
     %{
-      name: "status",
-      aliases: [],
-      usage: ["status"],
-      summary: "全学生リポジトリの状態を表示（サブコマンド省略時の既定）",
+      name: "list",
+      aliases: ["ls"],
+      usage: ["list", "ls"],
+      summary: "全学生リポジトリの一覧を表示（サブコマンド省略時の既定）",
       options: [
         :format,
         :type,
@@ -143,12 +143,14 @@ defmodule ThesisMonitor.CLI.Spec do
         :reverse
       ],
       examples: [
-        "status",
-        "status --show-protection",
-        "status --type thesis",
-        "status --type ise --pending-reviews",
-        "status -t -r",
-        "status --format json"
+        "list",
+        "ls",
+        "list --show-protection",
+        "list --type thesis",
+        "list --type ise --pending-reviews",
+        "list -a",
+        "list -t -r",
+        "list --format json"
       ]
     },
     %{

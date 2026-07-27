@@ -66,8 +66,11 @@ thesis-monitor init --registry-dir /path/to/thesis-student-registry/data
 ### 基本コマンド
 
 ```bash
-# 全学生リポジトリの状態表示（最新 draft ブランチ・最終更新）
-thesis-monitor status
+# 全学生リポジトリの一覧表示（最新 draft ブランチ・最終更新）
+# サブコマンド省略時の既定。エイリアス ls も使える
+thesis-monitor list
+thesis-monitor ls
+thesis-monitor          # 引数なしでも list を実行
 
 # 最近7日間の活動表示
 thesis-monitor activity
@@ -89,26 +92,30 @@ thesis-monitor search k22rs001
 
 ```bash
 # JSON / CSV 形式で出力
-thesis-monitor status --format json
-thesis-monitor status --format csv
+thesis-monitor list --format json
+thesis-monitor list --format csv
 
-# タイプで絞り込み（thesis = 卒論 + 修論のまとめフィルタ）
-thesis-monitor status --type thesis
-thesis-monitor status --type latex
+# タイプで絞り込み（thesis = 卒論 + 修論のまとめフィルタ。-T は --type の短縮形）
+thesis-monitor list --type thesis
+thesis-monitor list -T latex
+
+# archive 済みリポジトリも一覧に表示（-a は --show-archived の短縮形）
+thesis-monitor list --show-archived
+thesis-monitor list -a
 
 # ブランチ保護状況も表示
-thesis-monitor status --show-protection
+thesis-monitor list --show-protection
 
 # 教員の返信待ちリポジトリを表示（学生が更新したのに再レビューが返っていないもの。
 # 全オープン PR の学生コミットと教員レビューをリポジトリ単位に集約して判定する。
 # PR ごとに追加 API を叩くためオプトイン。--type と併用可）
-thesis-monitor status --type ise --pending-reviews
+thesis-monitor list --type ise --pending-reviews
 
 # 詳細ログ表示
-thesis-monitor status --verbose
+thesis-monitor list --verbose
 
 # カスタム設定ファイル使用
-thesis-monitor status --config ./my-config.yml
+thesis-monitor list --config ./my-config.yml
 ```
 
 ### pr-stats のオプション
