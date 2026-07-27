@@ -111,6 +111,28 @@ thesis-monitor status --verbose
 thesis-monitor status --config ./my-config.yml
 ```
 
+### pr-stats のオプション
+
+各リポジトリの Pull Request 状態を表示します（Total / Open / Closed / Merged / Draft / Status）。
+
+```bash
+# タイプで絞り込み
+thesis-monitor pr-stats --type thesis
+
+# PR 状態でフィルタ（open / closed / all、既定 all）
+thesis-monitor pr-stats --state open
+
+# 自分にレビューリクエストが来ている PR を持つリポジトリのみ
+thesis-monitor pr-stats --review-requested
+
+# ソート（repository / updated / created）+ 逆順
+thesis-monitor pr-stats --sort updated -r
+
+# JSON 出力・キャッシュ無効化
+thesis-monitor pr-stats --format json
+thesis-monitor pr-stats --no-cache
+```
+
 ## 設定
 
 ### 設定ファイル
