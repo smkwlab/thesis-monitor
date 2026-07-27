@@ -23,17 +23,32 @@ defmodule ThesisMonitor.CLITest do
 
       assert output =~ "thesis-monitor"
       assert output =~ "使用方法"
+      # status はコマンド一覧から消え、list（ls）に置き換わっている
+      assert output =~ "thesis-monitor list"
+      # 旧 status コマンドの例（thesis-monitor status ...）は残っていない
+      refute output =~ "thesis-monitor status"
     end
 
     test "renders per-command help" do
       output =
         capture_io(fn ->
-          assert catch_throw(CLI.main(["status", "--help"])) == {:cli_test_exit, 0}
+          assert catch_throw(CLI.main(["list", "--help"])) == {:cli_test_exit, 0}
         end)
 
-      assert output =~ "thesis-monitor status"
+      assert output =~ "thesis-monitor list"
       assert output =~ "--show-protection"
       refute output =~ "--test"
+    end
+
+    test "renders per-command help via the ls alias" do
+      output =
+        capture_io(fn ->
+          assert catch_throw(CLI.main(["ls", "--help"])) == {:cli_test_exit, 0}
+        end)
+
+      # エイリアスでも正準名 list の help に落ちる
+      assert output =~ "thesis-monitor list"
+      assert output =~ "--show-protection"
     end
 
     test "handles version flag and exits 0" do
@@ -66,7 +81,7 @@ defmodule ThesisMonitor.CLITest do
     test "rejects invalid enum values" do
       output =
         capture_io(:stderr, fn ->
-          assert catch_throw(CLI.main(["status", "--type", "bogus"])) == {:cli_test_exit, 1}
+          assert catch_throw(CLI.main(["list", "--type", "bogus"])) == {:cli_test_exit, 1}
         end)
 
       assert output =~ "bogus"
@@ -92,6 +107,33 @@ defmodule ThesisMonitor.CLITest do
 
     test "module can be loaded" do
       assert Code.ensure_loaded?(CLI)
+    end
+  end
+
+  describe "command resolution" do
+    test "no subcommand defaults to list" do
+      assert {:command, "list", [], _opts} = CLI.parse_args([])
+    end
+
+    test "ls is parsed as the list command" do
+      # parser は入力名（エイリアス）をそのまま返す。正準化は dispatch 側の責務
+      assert {:command, "ls", [], _opts} = CLI.parse_args(["ls"])
+    end
+
+    test "status is no longer a known command" do
+      refute "status" in CLI.known_commands()
+      assert "list" in CLI.known_commands()
+      assert CLISpec.find_command("status") == nil
+    end
+
+    test "-a is accepted as the short form of --show-archived" do
+      assert {:command, "list", [], opts} = CLI.parse_args(["list", "-a"])
+      assert opts[:show_archived] == true
+    end
+
+    test "-T is accepted as the short form of --type" do
+      assert {:command, "list", [], opts} = CLI.parse_args(["list", "-T", "thesis"])
+      assert opts[:type] == "thesis"
     end
   end
 

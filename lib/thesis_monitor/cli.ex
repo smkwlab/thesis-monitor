@@ -3,7 +3,7 @@ defmodule ThesisMonitor.CLI do
   学生論文リポジトリ管理ツールのCLIインターフェース。
 
   strict パース・help 短絡・コマンド別オプション検証は `ToolKit.CLI.Parser` に
-  委譲し、サブコマンド省略時は status を実行する。exit code は成功 0 / エラー 1。
+  委譲し、サブコマンド省略時は list を実行する。exit code は成功 0 / エラー 1。
   """
 
   alias ThesisMonitor.{
@@ -20,7 +20,7 @@ defmodule ThesisMonitor.CLI do
 
   @command_modules %{
     "init" => Commands.Init,
-    "status" => Commands.Status,
+    "list" => Commands.Status,
     "activity" => Commands.Activity,
     "pr-stats" => Commands.PullRequestStats,
     "check" => Commands.Check,
@@ -43,7 +43,7 @@ defmodule ThesisMonitor.CLI do
 
   @doc false
   def parse_args(args) do
-    case EngineParser.parse(Spec.spec(), args, default_command: "status") do
+    case EngineParser.parse(Spec.spec(), args, default_command: "list") do
       {:command, _invoked, _argv, opts} = command ->
         if opts[:version], do: :version, else: command
 
@@ -79,7 +79,9 @@ defmodule ThesisMonitor.CLI do
     exit_with_code(1)
   end
 
-  defp process({:command, command, args, opts}) do
+  defp process({:command, invoked, args, opts}) do
+    # invoked はエイリアス（例: ls）の可能性があるため正準名に解決してから dispatch する
+    command = canonical_command(invoked)
     configure_logger(opts)
 
     # init は設定ファイルを生成する側なので読み込まない
@@ -110,6 +112,14 @@ defmodule ThesisMonitor.CLI do
         Output.error("Unknown command: #{command}")
         IO.puts(Spec.render_help())
         exit_with_code(1)
+    end
+  end
+
+  # エイリアス（例: ls）を正準コマンド名（list）に解決する。未知の名前はそのまま返す
+  defp canonical_command(name) do
+    case Spec.find_command(name) do
+      nil -> name
+      command -> command.name
     end
   end
 
