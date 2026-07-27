@@ -118,6 +118,37 @@ defmodule ThesisMonitor.CLITest do
         end
       end
     end
+
+    test "pr-stats accepts the pr-status parity options (issue #59)" do
+      allowed = CLISpec.allowed_for("pr-stats")
+
+      for opt <- [:type, :state, :review_requested, :sort, :reverse, :format, :no_cache] do
+        assert MapSet.member?(allowed, opt), "pr-stats should allow --#{opt}"
+      end
+    end
+
+    test "pr-stats --help lists the new options" do
+      help = CLISpec.render_command_help("pr-stats")
+      assert help =~ "--state"
+      assert help =~ "--review-requested"
+      assert help =~ "--sort"
+    end
+
+    test "pr-stats rejects invalid --state and --sort enum values" do
+      output =
+        capture_io(:stderr, fn ->
+          assert catch_throw(CLI.main(["pr-stats", "--state", "bogus"])) == {:cli_test_exit, 1}
+        end)
+
+      assert output =~ "bogus"
+
+      output =
+        capture_io(:stderr, fn ->
+          assert catch_throw(CLI.main(["pr-stats", "--sort", "nope"])) == {:cli_test_exit, 1}
+        end)
+
+      assert output =~ "nope"
+    end
   end
 
   describe "init command" do
