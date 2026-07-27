@@ -122,6 +122,27 @@ defmodule ThesisMonitor.DataSource do
   end
 
   @doc """
+  registry-manager pr-status 相当の PR 集計を取得（Issue #59）
+  """
+  def get_pr_status_stats(%Student{} = student, state, no_cache \\ false) do
+    GitHubAPI.get_pr_status_stats(student, state, no_cache)
+  end
+
+  @doc """
+  指定ユーザーのレビューリクエスト待ち open PR をリポジトリが持つか（Issue #59）
+  """
+  def pr_review_requested?(%Student{} = student, username, no_cache \\ false) do
+    GitHubAPI.pr_review_requested?(student, username, no_cache)
+  end
+
+  @doc """
+  現在の GitHub ユーザー（`--review-requested` の対象判定用、Issue #59）
+  """
+  def get_current_github_user do
+    GitHubAPI.get_current_user()
+  end
+
+  @doc """
   最新ブランチを取得（論文・ISEレポート用）
 
   リポジトリが存在しない場合（exists: false）はブランチを取得せず nil を返す

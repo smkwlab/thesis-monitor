@@ -176,6 +176,157 @@ defmodule ThesisMonitor.DataSource.GitHubAPI do
   end
 
   @doc """
+  registry-manager `pr-status` 相当の PR 集計をリポジトリ単位で返す（Issue #59）。
+
+  `state`（"open" / "closed" / "all"）で取得対象を絞り、total / open / closed /
+  merged / draft / status / updated_at / created_at を集計する。取得した PR 一覧は
+  `ToolKit.Cache`（category "pr-status"）にキャッシュし、`no_cache: true` で
+  バイパスする。集計ロジックは `extract_pr_stats/1`（純粋関数）が担う。
+  """
+  def get_pr_status_stats(student, state, no_cache \\ false)
+
+  def get_pr_status_stats(%Student{repo_name: repo_name}, state, no_cache) do
+    prs = fetch_prs_cached(repo_name, state, no_cache)
+    {:ok, extract_pr_stats(prs)}
+  end
+
+  @doc """
+  指定ユーザーにレビューリクエストが来ている open PR をリポジトリが持つか判定する
+  （Issue #59）。
+
+  GitHub はレビュー提出でユーザーを `requested_reviewers` から外し、再リクエストで
+  戻すため、`requested_reviewers` への所属がそのまま「いまレビュー待ちか」を表す。
+  これは status の Pending（学生コミット時刻 vs 教員レビュー時刻。`pending_review?/2`）
+  とは別セマンティクスであり、意図的に別実装とする。open PR のみを対象にする。
+  """
+  def pr_review_requested?(student, username, no_cache \\ false)
+
+  def pr_review_requested?(%Student{repo_name: repo_name}, username, no_cache)
+      when is_binary(username) do
+    prs = fetch_prs_cached(repo_name, "open", no_cache)
+    {:ok, Enum.any?(prs, &pr_awaiting_review_from?(&1, username))}
+  end
+
+  def pr_review_requested?(_student, _username, _no_cache), do: {:ok, false}
+
+  @doc """
+  現在の GitHub ユーザー（`login`）を取得する（`--review-requested` の対象判定用）。
+  """
+  def get_current_user do
+    case Client.get("/user", client_opts()) do
+      {:ok, %{"login" => login}} when is_binary(login) -> {:ok, login}
+      {:ok, _body} -> {:error, :no_login}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  # PR 一覧を state 付きで取得し、per-repo・per-state でキャッシュする。
+  # no_cache 時はキャッシュを読まず常に API を叩く。キャッシュ層は JSON 文字列を
+  # 扱うため、取得結果を Jason でエンコードして保存し、読み出し時にデコードする。
+  defp fetch_prs_cached(repo_name, state, no_cache) do
+    key = "#{repo_name}:#{state}"
+
+    fetch_fn = fn ->
+      {:ok, prs} = get_pull_requests(repo_name, state)
+      {:ok, Jason.encode!(prs)}
+    end
+
+    case ThesisMonitor.Cache.pr_get_or_fetch(key, fetch_fn, no_cache) do
+      {:ok, json} when is_binary(json) ->
+        case Jason.decode(json) do
+          {:ok, prs} when is_list(prs) -> prs
+          _ -> []
+        end
+
+      _ ->
+        []
+    end
+  end
+
+  @doc false
+  # PR 一覧から registry-manager pr-status 相当の集計マップを作る（純粋関数）。
+  def extract_pr_stats(prs) when is_list(prs) do
+    total = length(prs)
+    open = count_prs_by_state(prs, "open")
+    closed = count_prs_by_state(prs, "closed")
+    merged = count_merged_prs(prs)
+    draft = count_draft_prs(prs)
+    {updated_at, created_at} = extract_pr_timestamps(prs)
+
+    %{
+      total: total,
+      open: open,
+      closed: closed,
+      merged: merged,
+      draft: draft,
+      status: determine_pr_status(open, merged, total),
+      updated_at: updated_at,
+      created_at: created_at
+    }
+  end
+
+  def extract_pr_stats(_) do
+    %{
+      total: 0,
+      open: 0,
+      closed: 0,
+      merged: 0,
+      draft: 0,
+      status: "No PRs",
+      updated_at: nil,
+      created_at: nil
+    }
+  end
+
+  defp count_prs_by_state(prs, state), do: Enum.count(prs, &(Map.get(&1, "state") == state))
+
+  # merged_at の有無で merged を判定（GitHub の merged フラグは PR 詳細にしか
+  # 含まれないため、一覧では merged_at で判定するのが確実。rm と同じ）
+  defp count_merged_prs(prs), do: Enum.count(prs, &(not is_nil(Map.get(&1, "merged_at"))))
+
+  defp count_draft_prs(prs), do: Enum.count(prs, &(Map.get(&1, "draft", false) == true))
+
+  # "No PRs" / "In Progress"（open あり）/ "Complete"（全 merged）/ "Under Review"
+  defp determine_pr_status(_open, _merged, 0), do: "No PRs"
+  defp determine_pr_status(open, _merged, _total) when open > 0, do: "In Progress"
+  defp determine_pr_status(_open, merged, total) when merged == total, do: "Complete"
+  defp determine_pr_status(_open, _merged, _total), do: "Under Review"
+
+  # 最新の updated_at / created_at を返す。GitHub の日時は "...Z"（UTC・固定長）で
+  # 辞書順 = 時系列順のため文字列の最大値で足りる。PR が無ければ {nil, nil}。
+  defp extract_pr_timestamps([]), do: {nil, nil}
+
+  defp extract_pr_timestamps(prs) do
+    {most_recent_timestamp(prs, "updated_at"), most_recent_timestamp(prs, "created_at")}
+  end
+
+  defp most_recent_timestamp(prs, field) do
+    prs
+    |> Enum.map(&Map.get(&1, field))
+    |> Enum.reject(&is_nil/1)
+    |> Enum.max(&>=/2, fn -> nil end)
+  end
+
+  @doc false
+  # PR オブジェクトの requested_reviewers から user login のリストを取り出す（純粋関数）。
+  def extract_requested_reviewer_logins(%{"requested_reviewers" => reviewers})
+      when is_list(reviewers) do
+    reviewers |> Enum.map(&Map.get(&1, "login")) |> Enum.reject(&is_nil/1)
+  end
+
+  def extract_requested_reviewer_logins(_), do: []
+
+  @doc false
+  # PR が指定ユーザーのレビュー待ちか（requested_reviewers に含まれるか。大小無視）。
+  def pr_awaiting_review_from?(pr, username) when is_map(pr) and is_binary(username) do
+    pr
+    |> extract_requested_reviewer_logins()
+    |> Enum.any?(fn login -> String.downcase(login) == String.downcase(username) end)
+  end
+
+  def pr_awaiting_review_from?(_, _), do: false
+
+  @doc """
   「教員の返信待ち」かをリポジトリ単位で返す（Issue #31 / #46）。
 
   全オープン PR の学生コミット・教員レビューをリポジトリ単位に集約し、
@@ -301,7 +452,13 @@ defmodule ThesisMonitor.DataSource.GitHubAPI do
   defp max_or_nil(list), do: Enum.max(list)
 
   defp get_pull_requests(repo_name, state, opts \\ []) do
-    params = if opts[:draft], do: [state: state, draft: true], else: [state: state]
+    # per_page=100（GitHub の上限）まで取得。closed/all はページ数が増えうるが、
+    # 学生リポジトリで 1 repo に 100 PR 超は非現実的なためページネーションは追わない。
+    params =
+      if opts[:draft],
+        do: [state: state, draft: true, per_page: 100],
+        else: [state: state, per_page: 100]
+
     path = "/repos/#{org()}/#{repo_name}/pulls"
 
     case Client.get(path, [params: params] ++ client_opts()) do

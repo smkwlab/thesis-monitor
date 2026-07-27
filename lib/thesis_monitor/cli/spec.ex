@@ -25,12 +25,22 @@ defmodule ThesisMonitor.CLI.Spec do
     "all"
   ]
   @output_formats ["table", "json", "csv"]
+  # PR 状態フィルタ（pr-stats の --state の enum）
+  @pr_states ["open", "closed", "all"]
+  # PR ソートキー（pr-stats の --sort の enum）
+  @pr_sort_keys ["repository", "updated", "created"]
 
   @doc "リポジトリタイプフィルタの正準リスト（--type の enum）"
   def type_filters, do: @type_filters
 
   @doc "出力形式の正準リスト（--format の enum）"
   def output_formats, do: @output_formats
+
+  @doc "PR 状態フィルタの正準リスト（pr-stats の --state の enum）"
+  def pr_states, do: @pr_states
+
+  @doc "PR ソートキーの正準リスト（pr-stats の --sort の enum）"
+  def pr_sort_keys, do: @pr_sort_keys
 
   @option_catalog %{
     help: %{type: :boolean, alias: :h, values: nil, doc: "このヘルプを表示"},
@@ -74,6 +84,19 @@ defmodule ThesisMonitor.CLI.Spec do
     # alias: :t が -t を受理させる（OptionParser は aliases 経由でのみ 1 文字形を解釈する）
     t: %{type: :boolean, alias: :t, values: nil, doc: "最終更新時刻順でソート"},
     reverse: %{type: :boolean, alias: :r, values: nil, doc: "ソート順を反転"},
+    state: %{type: :string, alias: nil, values: @pr_states, doc: "PR 状態でフィルタ（既定 all）"},
+    review_requested: %{
+      type: :boolean,
+      alias: nil,
+      values: nil,
+      doc: "自分にレビューリクエストが来ている PR を持つリポジトリのみ表示"
+    },
+    sort: %{
+      type: :string,
+      alias: nil,
+      values: @pr_sort_keys,
+      doc: "ソートキー（repository / updated / created）"
+    },
     test: %{
       type: :boolean,
       alias: nil,
@@ -141,8 +164,14 @@ defmodule ThesisMonitor.CLI.Spec do
       aliases: [],
       usage: ["pr-stats"],
       summary: "PR/Issue統計を表示",
-      options: [:format, :no_cache],
-      examples: ["pr-stats", "pr-stats --verbose"]
+      options: [:format, :type, :state, :review_requested, :sort, :reverse, :no_cache],
+      examples: [
+        "pr-stats",
+        "pr-stats --type thesis",
+        "pr-stats --state closed",
+        "pr-stats --review-requested",
+        "pr-stats --sort updated -r"
+      ]
     },
     %{
       name: "check",

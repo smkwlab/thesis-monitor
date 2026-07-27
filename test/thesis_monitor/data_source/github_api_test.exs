@@ -91,6 +91,105 @@ defmodule ThesisMonitor.DataSource.GitHubAPITest do
     end
   end
 
+  describe "extract_pr_stats/1 (issue #59)" do
+    test "aggregates total / open / closed / merged / draft from a PR list" do
+      prs = [
+        %{"state" => "open", "draft" => false, "merged_at" => nil},
+        %{"state" => "open", "draft" => true, "merged_at" => nil},
+        %{"state" => "closed", "draft" => false, "merged_at" => "2026-07-01T00:00:00Z"},
+        %{"state" => "closed", "draft" => false, "merged_at" => nil}
+      ]
+
+      stats = GitHubAPI.extract_pr_stats(prs)
+
+      assert stats.total == 4
+      assert stats.open == 2
+      assert stats.closed == 2
+      # merged は merged_at の有無で判定（closed のうち 1 件だけ）
+      assert stats.merged == 1
+      assert stats.draft == 1
+    end
+
+    test "status is 'In Progress' when any PR is open" do
+      prs = [%{"state" => "open", "merged_at" => nil}]
+      assert GitHubAPI.extract_pr_stats(prs).status == "In Progress"
+    end
+
+    test "status is 'Complete' when all PRs are merged" do
+      prs = [
+        %{"state" => "closed", "merged_at" => "2026-07-01T00:00:00Z"},
+        %{"state" => "closed", "merged_at" => "2026-07-02T00:00:00Z"}
+      ]
+
+      assert GitHubAPI.extract_pr_stats(prs).status == "Complete"
+    end
+
+    test "status is 'Under Review' when closed but not all merged and none open" do
+      prs = [
+        %{"state" => "closed", "merged_at" => "2026-07-01T00:00:00Z"},
+        %{"state" => "closed", "merged_at" => nil}
+      ]
+
+      assert GitHubAPI.extract_pr_stats(prs).status == "Under Review"
+    end
+
+    test "status is 'No PRs' and timestamps nil for an empty list" do
+      stats = GitHubAPI.extract_pr_stats([])
+      assert stats.status == "No PRs"
+      assert stats.total == 0
+      assert stats.updated_at == nil
+      assert stats.created_at == nil
+    end
+
+    test "picks the most recent updated_at / created_at" do
+      prs = [
+        %{
+          "state" => "open",
+          "merged_at" => nil,
+          "updated_at" => "2026-07-01T00:00:00Z",
+          "created_at" => "2026-06-01T00:00:00Z"
+        },
+        %{
+          "state" => "open",
+          "merged_at" => nil,
+          "updated_at" => "2026-07-05T00:00:00Z",
+          "created_at" => "2026-06-10T00:00:00Z"
+        }
+      ]
+
+      stats = GitHubAPI.extract_pr_stats(prs)
+      assert stats.updated_at == "2026-07-05T00:00:00Z"
+      assert stats.created_at == "2026-06-10T00:00:00Z"
+    end
+
+    test "returns empty stats for a non-list input" do
+      assert GitHubAPI.extract_pr_stats(nil).status == "No PRs"
+    end
+  end
+
+  describe "pr_awaiting_review_from?/2 (issue #59)" do
+    test "true when the username is in requested_reviewers (case-insensitive)" do
+      pr = %{"requested_reviewers" => [%{"login" => "Toshi0806"}]}
+      assert GitHubAPI.pr_awaiting_review_from?(pr, "toshi0806")
+    end
+
+    test "false when the username is not requested" do
+      pr = %{"requested_reviewers" => [%{"login" => "someone-else"}]}
+      refute GitHubAPI.pr_awaiting_review_from?(pr, "toshi0806")
+    end
+
+    test "false when requested_reviewers is absent or malformed" do
+      refute GitHubAPI.pr_awaiting_review_from?(%{}, "toshi0806")
+      refute GitHubAPI.pr_awaiting_review_from?(nil, "toshi0806")
+    end
+
+    test "extract_requested_reviewer_logins drops nil logins" do
+      pr = %{"requested_reviewers" => [%{"login" => "a"}, %{"other" => "x"}]}
+      assert GitHubAPI.extract_requested_reviewer_logins(pr) == ["a"]
+      assert GitHubAPI.extract_requested_reviewer_logins(%{}) == []
+    end
+  end
+
   describe "decode_contents_response/1 (issue #14)" do
     test "decodes base64 content (contents API inserts newlines every 60 chars)" do
       text = String.duplicate("registry content ", 10)
