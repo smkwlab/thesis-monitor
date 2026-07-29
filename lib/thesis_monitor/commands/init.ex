@@ -98,6 +98,13 @@ defmodule ThesisMonitor.Commands.Init do
     # 学生名簿 CSV（任意）。名簿はローカル管理のためリポジトリ・レジストリに置かない。
     # 未設定時は ~/.config/#{params.org}/students.csv を規約として参照（存在時のみ）
     # csv_path: /path/to/students.csv
+
+    # 教員（レビュアー）の GitHub ログイン一覧（任意, issue #65）。--pending-reviews で
+    # 「学生 commit」を判定する際に、ここに載る author と bot を除外する。これにより学生が
+    # 別 GitHub アカウント名義で commit しても返信待ちを取りこぼさない。未設定なら従来どおり
+    # PR 作成者ログインと一致する commit のみを学生とみなす。
+    # instructors:
+    #   - toshi0806
     """
   end
 

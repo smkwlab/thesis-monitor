@@ -19,6 +19,9 @@ defmodule ThesisMonitor.DataSource.GitHubAPI do
   # github_org 未設定なら "/repo" への静かな誤対象を避けて明示エラー（issue #28）
   defp org, do: ThesisMonitor.Config.require_github_org!(ThesisMonitor.Config.get(:github_org))
 
+  # 教員（レビュアー）ログイン一覧。--pending-reviews の学生 commit 判定に使う（issue #65）
+  defp instructors, do: ThesisMonitor.Config.get(:instructors) || []
+
   @doc """
   リポジトリ情報を取得
   """
@@ -337,19 +340,20 @@ defmodule ThesisMonitor.DataSource.GitHubAPI do
   """
   def get_pending_review_status(%Student{repo_name: repo_name}) do
     {:ok, open_prs} = get_pull_requests(repo_name, "open")
-    pairs = Enum.map(open_prs, &pr_activity_pair(repo_name, &1))
+    instructors = instructors()
+    pairs = Enum.map(open_prs, &pr_activity_pair(repo_name, &1, instructors))
     {:ok, repo_pending_review?(pairs)}
   end
 
   # PR の {学生の最新コミット時刻, 教員の最新レビュー時刻} を返す
-  defp pr_activity_pair(repo_name, pr) do
+  defp pr_activity_pair(repo_name, pr, instructors) do
     number = pr["number"]
     student_login = get_in(pr, ["user", "login"])
     {:ok, commits} = get_pr_commits(repo_name, number)
     {:ok, reviews} = get_pr_reviews(repo_name, number)
 
     {
-      latest_student_commit_at(commits, student_login),
+      latest_student_commit_at(commits, student_login, instructors),
       latest_instructor_review_at(reviews, student_login)
     }
   end
@@ -394,33 +398,50 @@ defmodule ThesisMonitor.DataSource.GitHubAPI do
   end
 
   @doc false
-  # PR の commits リストから学生（PR 作者）の最新コミット時刻（ISO8601）を返す。
-  # 該当なし/非リストなら nil。教員の propagate コミットや merge コミットを
-  # 「学生の更新」に数えないよう、PR 作者以外のコミットと merge コミットを除外する
-  # （Issue #46）。author が GitHub アカウントに紐付かないコミットは、学生の
-  # git 設定不備で返信待ちを見逃さないよう学生のものとみなす。
+  # PR の commits リストから学生の最新コミット時刻（ISO8601）を返す。該当なし/非リスト
+  # なら nil。merge コミットは除外する（Issue #46）。
+  #
+  # 「学生のコミット」の判定（Issue #65）:
+  #   - instructors（教員ログイン一覧）が空: 従来どおり PR 作者ログインと一致するもの。
+  #   - instructors が非空: bot と instructors 以外の author を学生とみなす。学生が
+  #     ローカルで別 GitHub アカウント名義で commit しても（PR 作者と不一致でも）拾えるので、
+  #     返信待ちの見逃しを防ぐ。教員の propagate コミットと bot は除外する。
+  # author が GitHub アカウントに紐付かないコミットは、学生の git 設定不備で返信待ちを
+  # 見逃さないよう学生のものとみなす。
   # committer.date（リポジトリに反映された時刻）を使う。学生が push / rebase した後の
   # 時刻をレビュー時刻と比較したいため、原著時刻の author.date より committer.date が適切。
   # GitHub の日時は "...Z"（UTC・固定長）で辞書順 = 時系列順のため文字列比較で足りる。
-  def latest_student_commit_at(commits, student_login) when is_list(commits) do
+  def latest_student_commit_at(commits, student_login, instructors \\ [])
+
+  def latest_student_commit_at(commits, student_login, instructors) when is_list(commits) do
     commits
     |> Enum.reject(&merge_commit?/1)
-    |> Enum.filter(&student_commit?(&1, student_login))
+    |> Enum.filter(&student_commit?(&1, student_login, instructors))
     |> Enum.map(&get_in(&1, ["commit", "committer", "date"]))
     |> Enum.reject(&is_nil/1)
     |> max_or_nil()
   end
 
-  def latest_student_commit_at(_, _), do: nil
+  def latest_student_commit_at(_, _, _), do: nil
 
   defp merge_commit?(commit), do: length(commit["parents"] || []) > 1
 
-  defp student_commit?(commit, student_login) do
+  defp student_commit?(commit, student_login, instructors) do
     case get_in(commit, ["author", "login"]) do
-      nil -> true
-      login -> login == student_login
+      nil ->
+        true
+
+      login ->
+        cond do
+          bot_login?(login) -> false
+          instructors == [] -> login == student_login
+          true -> login not in instructors
+        end
     end
   end
+
+  defp bot_login?(login) when is_binary(login), do: String.ends_with?(login, "[bot]")
+  defp bot_login?(_), do: false
 
   @doc false
   # reviews から、学生本人（student_login）と bot を除いた「教員」レビューの

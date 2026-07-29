@@ -22,6 +22,11 @@ defmodule ThesisMonitor.Config do
     cache_ttl: 1800,
     # 学生名簿 CSV（任意）。ローカル管理方針のためリポジトリ・レジストリには置かない
     csv_path: nil,
+    # 教員（レビュアー）の GitHub ログイン一覧（issue #65）。--pending-reviews で
+    # 「学生 commit」を判定する際、ここに載る author と bot を教員/自動更新として
+    # 除外し、残り（PR 作成者と別アカウント名義でも）を学生とみなす。空なら従来どおり
+    # PR 作成者ログインと一致する commit のみを学生とする。config.yml に YAML リストで設定。
+    instructors: [],
     max_concurrency: 10,
     timeout: 10_000
   }
