@@ -81,6 +81,17 @@ defmodule ThesisMonitor.Commands.InitTest do
       assert content =~ "students.csv"
     end
 
+    test "includes a commented instructors hint (issue #65)" do
+      config = tmp_path("init_config") <> ".yml"
+      on_exit(fn -> File.rm(config) end)
+
+      assert {:ok, _} =
+               Init.run([], [config: config], %{output: output_stub(), gh: gh_ok_stub()})
+
+      content = File.read!(config)
+      assert content =~ "# instructors:"
+    end
+
     test "derives the commented registry_repo from --org by convention" do
       config = tmp_path("init_config") <> ".yml"
       on_exit(fn -> File.rm(config) end)

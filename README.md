@@ -165,6 +165,13 @@ cache_dir: ~/.cache/thesis-monitor
 # 未設定時は ~/.config/<github_org>/students.csv を規約として参照（存在時のみ）
 csv_path: /path/to/students.csv
 
+# 教員（レビュアー）の GitHub ログイン一覧（任意, issue #65）。--pending-reviews で
+# 「学生 commit」を判定する際、ここに載る author と bot を除外し、残りを学生とみなす。
+# これにより学生がローカルで別 GitHub アカウント名義で commit しても返信待ちを
+# 取りこぼさない。未設定なら従来どおり PR 作成者ログインと一致する commit のみが学生。
+instructors:
+  - toshi0806
+
 # パフォーマンス設定
 cache_ttl: 1800         # レジストリ/API キャッシュ有効期限（秒）
 max_concurrency: 10     # 最大並行リクエスト数

@@ -303,6 +303,79 @@ defmodule ThesisMonitor.DataSource.GitHubAPITest do
     end
   end
 
+  describe "latest_student_commit_at/3 instructor-exclusion (issue #65)" do
+    test "counts a student's alternate-account commit when instructors are configured" do
+      # k24rs062: PR 作成者は CarpedieMMMMMM だが commit は本人の別アカウント
+      # Yoloo0000 名義。instructors に無い author は学生とみなし、pending を見逃さない
+      commits = [student_commit("2026-07-29T08:38:14Z", "Yoloo0000")]
+
+      assert GitHubAPI.latest_student_commit_at(commits, "CarpedieMMMMMM", ["toshi0806"]) ==
+               "2026-07-29T08:38:14Z"
+    end
+
+    test "excludes instructor commits when instructors are configured" do
+      # 教員 (toshi0806) の propagate/修正コミットは学生の更新に数えない
+      commits = [
+        student_commit("2026-07-22T05:28:50Z", "Yoloo0000"),
+        student_commit("2026-07-29T08:00:00Z", "toshi0806")
+      ]
+
+      assert GitHubAPI.latest_student_commit_at(commits, "CarpedieMMMMMM", ["toshi0806"]) ==
+               "2026-07-22T05:28:50Z"
+    end
+
+    test "excludes bot commits when instructors are configured" do
+      commits = [
+        student_commit("2026-07-22T05:28:50Z", "Yoloo0000"),
+        student_commit("2026-07-29T08:23:11Z", "github-actions[bot]")
+      ]
+
+      assert GitHubAPI.latest_student_commit_at(commits, "CarpedieMMMMMM", ["toshi0806"]) ==
+               "2026-07-22T05:28:50Z"
+    end
+
+    test "picks the student commit out of a mixed real-world history (k24rs062 #3)" do
+      # 実データ相当: 学生(別名義)+ 教員修正 + bot が混在
+      commits = [
+        student_commit("2026-07-22T06:17:37Z", "Yoloo0000"),
+        student_commit("2026-07-15T06:22:56Z", "toshi0806"),
+        student_commit("2026-07-15T06:23:11Z", "github-actions[bot]"),
+        student_commit("2026-07-29T08:38:14Z", "Yoloo0000")
+      ]
+
+      assert GitHubAPI.latest_student_commit_at(commits, "CarpedieMMMMMM", ["toshi0806"]) ==
+               "2026-07-29T08:38:14Z"
+    end
+
+    test "falls back to PR-author matching when instructors is empty" do
+      # instructors 未設定時は従来どおり PR 作成者一致（別名義は数えない）
+      commits = [
+        student_commit("2026-07-08T06:00:00Z", "CarpedieMMMMMM"),
+        student_commit("2026-07-29T08:38:14Z", "Yoloo0000")
+      ]
+
+      assert GitHubAPI.latest_student_commit_at(commits, "CarpedieMMMMMM", []) ==
+               "2026-07-08T06:00:00Z"
+    end
+
+    test "arity-2 delegates to empty instructors (legacy behavior preserved)" do
+      commits = [
+        student_commit("2026-07-08T06:00:00Z", "CarpedieMMMMMM"),
+        student_commit("2026-07-29T08:38:14Z", "Yoloo0000")
+      ]
+
+      assert GitHubAPI.latest_student_commit_at(commits, "CarpedieMMMMMM") ==
+               GitHubAPI.latest_student_commit_at(commits, "CarpedieMMMMMM", [])
+    end
+
+    test "returns nil for a non-list instructors instead of crashing" do
+      # public 関数の契約: instructors が非リスト（nil 等）でもクラッシュせず nil を返す
+      commits = [student_commit("2026-07-29T08:38:14Z", "Yoloo0000")]
+
+      assert GitHubAPI.latest_student_commit_at(commits, "CarpedieMMMMMM", nil) == nil
+    end
+  end
+
   describe "repo_pending_review?/1 (issue #46)" do
     test "false when the newest draft PR carries the latest instructor review" do
       # k24rs124 の誤検出ケース: 下位 PR(0th/1st-draft)は開いたまま残り、
