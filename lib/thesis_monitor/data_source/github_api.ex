@@ -19,8 +19,11 @@ defmodule ThesisMonitor.DataSource.GitHubAPI do
   # github_org 未設定なら "/repo" への静かな誤対象を避けて明示エラー（issue #28）
   defp org, do: ThesisMonitor.Config.require_github_org!(ThesisMonitor.Config.get(:github_org))
 
-  # 教員（レビュアー）ログイン一覧。--pending-reviews の学生 commit 判定に使う（issue #65）
-  defp instructors, do: ThesisMonitor.Config.get(:instructors) || []
+  # 教員（レビュアー）ログイン一覧。--pending-reviews の学生 commit 判定に使う（issue #65）。
+  # 未設定（nil）でも config で誤ってスカラー（`instructors: toshi0806`）を書かれても、
+  # List.wrap で常にリスト化する。非リストのまま student_commit? に渡すとガードで nil 返却
+  # となり、全 PR がサイレントに not-pending に見える事故を防ぐ。
+  defp instructors, do: ThesisMonitor.Config.get(:instructors) |> List.wrap()
 
   @doc """
   リポジトリ情報を取得
@@ -441,6 +444,9 @@ defmodule ThesisMonitor.DataSource.GitHubAPI do
     end
   end
 
+  # GitHub のユーザー名は英数字とハイフンのみで `[` `]` を含められないため、`[bot]` 接尾辞は
+  # bot / GitHub App アカウント（例 `github-actions[bot]`）に固有で一般ユーザーを誤除外しない。
+  # レビュー側の latest_instructor_review_at/2 と同じ慣例判定に揃えている。
   defp bot_login?(login) when is_binary(login), do: String.ends_with?(login, "[bot]")
   defp bot_login?(_), do: false
 
