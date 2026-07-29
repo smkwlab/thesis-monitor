@@ -367,6 +367,13 @@ defmodule ThesisMonitor.DataSource.GitHubAPITest do
       assert GitHubAPI.latest_student_commit_at(commits, "CarpedieMMMMMM") ==
                GitHubAPI.latest_student_commit_at(commits, "CarpedieMMMMMM", [])
     end
+
+    test "returns nil for a non-list instructors instead of crashing" do
+      # public 関数の契約: instructors が非リスト（nil 等）でもクラッシュせず nil を返す
+      commits = [student_commit("2026-07-29T08:38:14Z", "Yoloo0000")]
+
+      assert GitHubAPI.latest_student_commit_at(commits, "CarpedieMMMMMM", nil) == nil
+    end
   end
 
   describe "repo_pending_review?/1 (issue #46)" do

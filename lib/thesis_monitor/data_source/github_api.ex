@@ -413,7 +413,8 @@ defmodule ThesisMonitor.DataSource.GitHubAPI do
   # GitHub の日時は "...Z"（UTC・固定長）で辞書順 = 時系列順のため文字列比較で足りる。
   def latest_student_commit_at(commits, student_login, instructors \\ [])
 
-  def latest_student_commit_at(commits, student_login, instructors) when is_list(commits) do
+  def latest_student_commit_at(commits, student_login, instructors)
+      when is_list(commits) and is_list(instructors) do
     commits
     |> Enum.reject(&merge_commit?/1)
     |> Enum.filter(&student_commit?(&1, student_login, instructors))
