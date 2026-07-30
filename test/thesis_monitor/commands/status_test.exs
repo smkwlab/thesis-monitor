@@ -318,9 +318,9 @@ defmodule ThesisMonitor.Commands.StatusTest do
       assert Enum.any?(rows, fn row -> "final-2nd (2026-01-15)" in row end)
     end
 
-    test "shows N/A for a non-applicable type (wr/ise), without calling the API" do
+    test "shows N/A for a non-applicable type (wr), without calling the API" do
       pid = self()
-      students = [%Student{id: "k24rs062", repo_name: "k24rs062-ise-report1", repo_type: "ise"}]
+      students = [%Student{id: "k22rs009", repo_name: "k22rs009-wr", repo_type: "wr"}]
 
       mock_data_source = %{
         get_all_students: fn -> {:ok, students} end,

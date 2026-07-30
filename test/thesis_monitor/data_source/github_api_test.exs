@@ -477,25 +477,48 @@ defmodule ThesisMonitor.DataSource.GitHubAPITest do
     end
   end
 
-  describe "parse_latest_release/1 (issue #67)" do
-    test "maps a release body to name + date (YYYY-MM-DD)" do
-      body = %{"tag_name" => "final-2nd", "published_at" => "2026-01-15T09:00:00Z"}
-
-      assert GitHubAPI.parse_latest_release({:ok, body}) ==
-               %{name: "final-2nd", date: "2026-01-15"}
+  describe "milestone_tag?/1 (issue #67)" do
+    test "keeps student milestone tags (submit / final / final-N / abstract-submit)" do
+      for name <- ["submit", "final", "final-2", "abstract-submit"] do
+        assert GitHubAPI.milestone_tag?(name), "expected #{name} to be a milestone tag"
+      end
     end
 
-    test "returns :none when there is no formal release (404)" do
-      assert GitHubAPI.parse_latest_release({:error, :not_found}) == :none
+    test "drops build-artifact tags (<ref>-release)" do
+      for name <- ["2nd-draft-release", "0th-draft-release", "add-ml-workflow-release"] do
+        refute GitHubAPI.milestone_tag?(name), "expected #{name} to be dropped"
+      end
     end
 
-    test "returns nil for other errors (unknown, shown as N/A)" do
-      assert GitHubAPI.parse_latest_release({:error, :unauthorized}) == nil
+    test "drops namespaced bot tags (renovate/* , dependabot/*)" do
+      for name <- ["renovate/configure-release", "dependabot/github_actions/foo-1.0-release"] do
+        refute GitHubAPI.milestone_tag?(name), "expected #{name} to be dropped"
+      end
     end
 
-    test "tolerates a missing published_at (date nil)" do
-      assert GitHubAPI.parse_latest_release({:ok, %{"tag_name" => "submit"}}) ==
-               %{name: "submit", date: nil}
+    test "returns false for non-binary input" do
+      refute GitHubAPI.milestone_tag?(nil)
+    end
+  end
+
+  describe "select_latest_tag/1 (issue #67)" do
+    test "returns :none for an empty list" do
+      assert GitHubAPI.select_latest_tag([]) == :none
+    end
+
+    test "picks the tag with the newest commit date" do
+      tags = [
+        %{name: "submit", date: "2026-01-08"},
+        %{name: "final-2", date: "2026-02-01"},
+        %{name: "final", date: "2026-01-20"}
+      ]
+
+      assert GitHubAPI.select_latest_tag(tags) == %{name: "final-2", date: "2026-02-01"}
+    end
+
+    test "treats a nil date as the oldest" do
+      tags = [%{name: "final", date: "2026-01-20"}, %{name: "wip", date: nil}]
+      assert GitHubAPI.select_latest_tag(tags) == %{name: "final", date: "2026-01-20"}
     end
   end
 

@@ -181,15 +181,16 @@ defmodule ThesisMonitor.DataSource do
   end
 
   @doc """
-  最新タグ（正式リリース）の追跡が必要かチェック
+  最新の提出マイルストーンタグの追跡が必要かチェック
 
-  タグ→リリースは文書種別に紐づく機能（latex-release-action が Release を作る
-  テンプレート）で判定する。thesis(sotsuron/master)・latex・poster が対象。
-  wr はタグ運用が無く、ise は Release 自体が無いため対象外。review_flow とは独立
-  （返信待ちの追跡要否とは判定軸が異なる）。archive 済みは運用終了のため対象外。
+  提出タグ（`submit` / `final` / `final-*` 等）を打つ文書種別で判定する。
+  thesis(sotsuron/master)・latex・poster に加え、ise も対象（ise は Release を作らず
+  git タグ `final` だけを打つため、タグベースで拾う）。wr は週次ビルドで提出
+  マイルストーンタグを通常持たないため対象外。review_flow とは独立（返信待ちの追跡
+  要否とは判定軸が異なる）。archive 済みは運用終了のため対象外。
   """
   def needs_latest_tag?(%Student{repo_type: type} = student)
-      when type in ["sotsuron", "master", "latex", "poster"],
+      when type in ["sotsuron", "master", "latex", "poster", "ise"],
       do: not Student.archived?(student)
 
   def needs_latest_tag?(_), do: false

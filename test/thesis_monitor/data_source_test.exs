@@ -194,14 +194,14 @@ defmodule ThesisMonitor.DataSourceTest do
   end
 
   describe "needs_latest_tag?/1 (issue #67)" do
-    test "returns true for release-producing types (thesis/latex/poster)" do
-      for type <- ["sotsuron", "master", "latex", "poster"] do
+    test "returns true for submission-tag types (thesis/latex/poster/ise)" do
+      for type <- ["sotsuron", "master", "latex", "poster", "ise"] do
         assert DataSource.needs_latest_tag?(%Student{repo_type: type}) == true
       end
     end
 
-    test "returns false for types without a LaTeX release flow (wr/ise/other)" do
-      for type <- ["wr", "ise", "other", nil] do
+    test "returns false for types without submission tags (wr/other)" do
+      for type <- ["wr", "other", nil] do
         assert DataSource.needs_latest_tag?(%Student{repo_type: type}) == false
       end
     end

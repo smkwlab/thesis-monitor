@@ -349,33 +349,77 @@ defmodule ThesisMonitor.DataSource.GitHubAPI do
   end
 
   @doc """
-  最新の正式リリース（non-prerelease）を取得する（Issue #67）。
+  最新の提出マイルストーンタグを取得する（Issue #67）。
 
-  `GET /repos/{org}/{repo}/releases/latest` は draft/prerelease を除外した最新
-  リリースを1呼び出しで返す。学生 repo では `submit` / `final-*` のマイルストーン
-  タグ push がこの正式リリースになり、PR/ブランチビルドの `<ref>-release` prerelease は
-  自動的に除外される。返り値は `{:ok, value}`:
-    - `%{name, date}`  正式リリースあり（date は published_at の YYYY-MM-DD）
-    - `:none`          正式リリース無し（404）
-    - `nil`            その他のエラー（不明。表示上は N/A）
+  git タグ（`GET /repos/{org}/{repo}/tags`）を対象にする。ise は HTML 運用で Release を
+  作らず `final` タグだけを打つため、Release ではなくタグを見る。ビルド生成物（`<ref>-release`）
+  と bot タグ（`renovate/*` / `dependabot/*`）はノイズとして除外し、残ったマイルストーン
+  タグ（`submit` / `final` / `final-*` / `abstract-submit` 等）から commit 日付が最新の
+  ものを選ぶ。タグ API は日付を返さないため、除外後の少数タグについて commit を追加取得する。
+  返り値は `{:ok, value}`:
+    - `%{name, date}`  マイルストーンタグあり（date は committer.date の YYYY-MM-DD）
+    - `:none`          タグ無し / マイルストーンタグ無し
+    - `nil`            API エラー（不明。表示上は N/A）
   """
   def get_latest_tag(%Student{repo_name: repo_name}) do
-    path = "/repos/#{org()}/#{repo_name}/releases/latest"
-    {:ok, parse_latest_release(Client.get(path, client_opts()))}
+    case list_tags(repo_name) do
+      {:ok, tags} ->
+        dated =
+          tags
+          |> Enum.filter(&milestone_tag?(&1["name"]))
+          |> Enum.map(
+            &%{name: &1["name"], date: tag_commit_date(repo_name, get_in(&1, ["commit", "sha"]))}
+          )
+
+        {:ok, select_latest_tag(dated)}
+
+      {:error, :not_found} ->
+        {:ok, :none}
+
+      _ ->
+        {:ok, nil}
+    end
   end
 
   @doc false
-  # releases/latest のレスポンスを表示用の値へ整形する（純粋関数・テスト対象）。
-  def parse_latest_release({:ok, %{"tag_name" => name} = body}) do
-    %{name: name, date: release_date(body["published_at"])}
+  # 学生の提出マイルストーンタグか。ビルド生成物（`*-release`）と bot の名前空間タグ
+  # （`renovate/…` / `dependabot/…`、`/` を含む）を除外する（純粋関数・テスト対象）。
+  def milestone_tag?(name) when is_binary(name) do
+    not String.contains?(name, "/") and not String.ends_with?(name, "-release")
   end
 
-  def parse_latest_release({:error, :not_found}), do: :none
-  def parse_latest_release(_), do: nil
+  def milestone_tag?(_), do: false
 
-  # published_at（ISO8601）から日付部分 YYYY-MM-DD を取り出す。欠損は nil。
-  defp release_date(date) when is_binary(date), do: String.slice(date, 0, 10)
-  defp release_date(_), do: nil
+  @doc false
+  # `%{name, date}` のリストから commit 日付（YYYY-MM-DD 文字列）が最大のものを選ぶ。
+  # 空なら :none。date=nil は最古扱い（辞書順で "" 最小）。純粋関数・テスト対象。
+  def select_latest_tag([]), do: :none
+  def select_latest_tag(tags), do: Enum.max_by(tags, fn %{date: date} -> date || "" end)
+
+  # /tags（newest 保証は無いので全件取得してこちらで日付比較する）。per_page=100 まで。
+  defp list_tags(repo_name) do
+    path = "/repos/#{org()}/#{repo_name}/tags"
+
+    case Client.get(path, [params: [per_page: 100]] ++ client_opts()) do
+      {:ok, list} when is_list(list) -> {:ok, list}
+      other -> other
+    end
+  end
+
+  # タグが指す commit の committer.date（YYYY-MM-DD）。取得不可なら nil。
+  defp tag_commit_date(repo_name, sha) when is_binary(sha) do
+    path = "/repos/#{org()}/#{repo_name}/commits/#{sha}"
+
+    case Client.get(path, client_opts()) do
+      {:ok, %{"commit" => %{"committer" => %{"date" => date}}}} when is_binary(date) ->
+        String.slice(date, 0, 10)
+
+      _ ->
+        nil
+    end
+  end
+
+  defp tag_commit_date(_repo_name, _sha), do: nil
 
   # PR の {学生の最新コミット時刻, 教員の最新レビュー時刻} を返す
   defp pr_activity_pair(repo_name, pr, instructors) do
