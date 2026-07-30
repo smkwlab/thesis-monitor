@@ -364,6 +364,9 @@ defmodule ThesisMonitor.DataSource.GitHubAPI do
   def get_latest_tag(%Student{repo_name: repo_name}) do
     case list_tags(repo_name) do
       {:ok, tags} ->
+        # 除外後のマイルストーンタグは通常少数（ise は 1、thesis でも submit/final/final-*/
+        # abstract-submit 程度）のため、各タグの commit 日付取得は直列でよい。repo 間の
+        # 並列は fetch_latest_tags_for_students 側（max_concurrency: 10）が担う。
         dated =
           tags
           |> Enum.filter(&milestone_tag?(&1["name"]))
@@ -391,12 +394,15 @@ defmodule ThesisMonitor.DataSource.GitHubAPI do
   def milestone_tag?(_), do: false
 
   @doc false
-  # `%{name, date}` のリストから commit 日付（YYYY-MM-DD 文字列）が最大のものを選ぶ。
-  # 空なら :none。date=nil は最古扱い（辞書順で "" 最小）。純粋関数・テスト対象。
+  # `%{name, date}` のリストから commit 日付が最大のものを選ぶ。空なら :none。
+  # date は tag_commit_date が返す "YYYY-MM-DD"（固定長）前提で、辞書順 = 時系列順のため
+  # 文字列比較で足りる。date=nil は最古扱い（"" が辞書順最小）。純粋関数・テスト対象。
   def select_latest_tag([]), do: :none
   def select_latest_tag(tags), do: Enum.max_by(tags, fn %{date: date} -> date || "" end)
 
-  # /tags（newest 保証は無いので全件取得してこちらで日付比較する）。per_page=100 まで。
+  # /tags は newest 保証が無いので全件取得してこちらで日付比較する。per_page=100（上限）まで。
+  # 1 repo に 100 タグ超は非現実的なためページネーションは追わない（get_pr_commits と同方針）。
+  # ただし *-release ビルドタグが 100 件を超えるとマイルストーンが押し出されうる点は許容する。
   defp list_tags(repo_name) do
     path = "/repos/#{org()}/#{repo_name}/tags"
 
