@@ -376,9 +376,9 @@ defmodule ThesisMonitor.DataSource.GitHubAPI do
 
         {:ok, select_latest_tag(dated)}
 
-      {:error, :not_found} ->
-        {:ok, :none}
-
+      # 取得失敗（存在しない repo / 権限 / ネットワーク等）は「不明」= N/A（nil）。
+      # 「タグ 0 件」は {:ok, []} → select_latest_tag([]) が :none（= -）を返すため、
+      # ここで 404 を :none に丸めない（存在しない repo を「未提出」に見せない）。
       _ ->
         {:ok, nil}
     end
