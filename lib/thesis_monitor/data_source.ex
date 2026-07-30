@@ -170,6 +170,31 @@ defmodule ThesisMonitor.DataSource do
   def needs_latest_branch?(_), do: false
 
   @doc """
+  最新の正式リリース（タグ）を取得（Issue #67、--latest-tag 用）
+
+  リポジトリが存在しない場合（exists: false）は取得せず nil を返す。
+  """
+  def get_latest_tag(%Student{exists: false}), do: {:ok, nil}
+
+  def get_latest_tag(%Student{} = student) do
+    GitHubAPI.get_latest_tag(student)
+  end
+
+  @doc """
+  最新タグ（正式リリース）の追跡が必要かチェック
+
+  タグ→リリースは文書種別に紐づく機能（latex-release-action が Release を作る
+  テンプレート）で判定する。thesis(sotsuron/master)・latex・poster が対象。
+  wr はタグ運用が無く、ise は Release 自体が無いため対象外。review_flow とは独立
+  （返信待ちの追跡要否とは判定軸が異なる）。archive 済みは運用終了のため対象外。
+  """
+  def needs_latest_tag?(%Student{repo_type: type} = student)
+      when type in ["sotsuron", "master", "latex", "poster"],
+      do: not Student.archived?(student)
+
+  def needs_latest_tag?(_), do: false
+
+  @doc """
   archive 済みの学生を除外する。
 
   show_archived が `true` のときだけ除外せず全件返す。`false`・`nil`

@@ -277,6 +277,120 @@ defmodule ThesisMonitor.Commands.StatusTest do
     end
   end
 
+  describe "latest tag display (issue #67)" do
+    defp latest_tag_deps(pid, mock_data_source) do
+      mock_output = %{
+        info: fn msg -> send(pid, {:info, msg}) end,
+        puts: fn text -> send(pid, {:puts, text}) end,
+        error: fn msg -> send(pid, {:error, msg}) end,
+        warn: fn msg -> send(pid, {:warn, msg}) end,
+        print_table: fn headers, rows, _title, _opts ->
+          send(pid, {:print_table, headers, rows})
+        end
+      }
+
+      %{
+        data_source: mock_data_source,
+        output: mock_output,
+        token_manager: %{get_source: fn -> :config end}
+      }
+    end
+
+    test "shows 'name (date)' for an applicable type with a formal release" do
+      pid = self()
+      students = [%Student{id: "k22rs001", repo_name: "k22rs001-sotsuron", repo_type: "sotsuron"}]
+
+      mock_data_source = %{
+        get_all_students: fn -> {:ok, students} end,
+        filter_students_by_type: fn s, _type -> s end,
+        get_repositories_info: fn s -> Enum.map(s, &{:ok, &1}) end,
+        needs_latest_branch?: fn _ -> false end,
+        get_latest_branch: fn _ -> {:ok, "main"} end,
+        check_branch_protection: fn s -> {:ok, s} end,
+        needs_latest_tag?: fn _ -> true end,
+        get_latest_tag: fn _ -> {:ok, %{name: "final-2nd", date: "2026-01-15"}} end
+      }
+
+      Status.run([], [latest_tag: true], latest_tag_deps(pid, mock_data_source))
+
+      assert_received {:print_table, headers, rows}
+      assert "Latest Tag" in headers
+      assert Enum.any?(rows, fn row -> "final-2nd (2026-01-15)" in row end)
+    end
+
+    test "shows N/A for a non-applicable type (wr/ise), without calling the API" do
+      pid = self()
+      students = [%Student{id: "k24rs062", repo_name: "k24rs062-ise-report1", repo_type: "ise"}]
+
+      mock_data_source = %{
+        get_all_students: fn -> {:ok, students} end,
+        filter_students_by_type: fn s, _type -> s end,
+        get_repositories_info: fn s -> Enum.map(s, &{:ok, &1}) end,
+        needs_latest_branch?: fn _ -> false end,
+        get_latest_branch: fn _ -> {:ok, "main"} end,
+        check_branch_protection: fn s -> {:ok, s} end,
+        needs_latest_tag?: fn _ -> false end,
+        get_latest_tag: fn _ ->
+          send(pid, :tag_called)
+          {:ok, :none}
+        end
+      }
+
+      Status.run([], [latest_tag: true], latest_tag_deps(pid, mock_data_source))
+
+      assert_received {:print_table, headers, rows}
+      assert "Latest Tag" in headers
+      assert Enum.any?(rows, fn row -> "N/A" in row end)
+      refute_received :tag_called
+    end
+
+    test "shows '-' for an applicable type with no formal release yet" do
+      pid = self()
+      students = [%Student{id: "k22rs002", repo_name: "k22rs002-sotsuron", repo_type: "sotsuron"}]
+
+      mock_data_source = %{
+        get_all_students: fn -> {:ok, students} end,
+        filter_students_by_type: fn s, _type -> s end,
+        get_repositories_info: fn s -> Enum.map(s, &{:ok, &1}) end,
+        needs_latest_branch?: fn _ -> false end,
+        get_latest_branch: fn _ -> {:ok, "main"} end,
+        check_branch_protection: fn s -> {:ok, s} end,
+        needs_latest_tag?: fn _ -> true end,
+        get_latest_tag: fn _ -> {:ok, :none} end
+      }
+
+      Status.run([], [latest_tag: true], latest_tag_deps(pid, mock_data_source))
+
+      assert_received {:print_table, _headers, rows}
+      assert Enum.any?(rows, fn row -> "-" in row end)
+    end
+
+    test "does not fetch or show the column when the option is absent" do
+      pid = self()
+      students = [%Student{id: "k22rs003", repo_name: "k22rs003-sotsuron", repo_type: "sotsuron"}]
+
+      mock_data_source = %{
+        get_all_students: fn -> {:ok, students} end,
+        filter_students_by_type: fn s, _type -> s end,
+        get_repositories_info: fn s -> Enum.map(s, &{:ok, &1}) end,
+        needs_latest_branch?: fn _ -> false end,
+        get_latest_branch: fn _ -> {:ok, "main"} end,
+        check_branch_protection: fn s -> {:ok, s} end,
+        needs_latest_tag?: fn _ ->
+          send(pid, :tag_gate_called)
+          true
+        end,
+        get_latest_tag: fn _ -> {:ok, :none} end
+      }
+
+      Status.run([], [], latest_tag_deps(pid, mock_data_source))
+
+      assert_received {:print_table, headers, _rows}
+      refute "Latest Tag" in headers
+      refute_received :tag_gate_called
+    end
+  end
+
   describe "archived display" do
     test "shows archived in the Latest Branch column for archived rows" do
       pid = self()

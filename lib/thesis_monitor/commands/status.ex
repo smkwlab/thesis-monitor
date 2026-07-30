@@ -98,10 +98,47 @@ defmodule ThesisMonitor.Commands.Status do
     students = fetch_latest_branches_for_students(students, data_source)
 
     # 教員の返信待ち（オプトイン。PR ごとに追加 API を叩くため）
-    if opts[:pending_reviews] do
-      fetch_pending_reviews_for_students(students, data_source)
+    students =
+      if opts[:pending_reviews] do
+        fetch_pending_reviews_for_students(students, data_source)
+      else
+        students
+      end
+
+    # 最新タグ（正式リリース）（オプトイン。repo ごとに追加 API を叩くため）
+    if opts[:latest_tag] do
+      fetch_latest_tags_for_students(students, data_source)
     else
       students
+    end
+  end
+
+  # fetch_pending_reviews_for_students と同じ zip + on_timeout パターン。API 追加取得の
+  # タイムアウトで学生を一覧から落とさず、失敗時は latest_tag: nil のまま残す（→ N/A）。
+  defp fetch_latest_tags_for_students(students, data_source) do
+    students
+    |> Task.async_stream(&fetch_latest_tag(&1, data_source),
+      ordered: true,
+      timeout: 15_000,
+      max_concurrency: 10,
+      on_timeout: :kill_task
+    )
+    |> Enum.zip(students)
+    |> Enum.map(fn
+      {{:ok, student}, _original} -> student
+      {_, original} -> original
+    end)
+  end
+
+  # 対象タイプ（thesis/latex/poster）のときだけ API を叩く。非対象は latest_tag: nil のまま（N/A）。
+  defp fetch_latest_tag(student, data_source) do
+    if call_data_source(data_source, :needs_latest_tag?, [student]) do
+      case call_data_source(data_source, :get_latest_tag, [student]) do
+        {:ok, tag} -> %{student | latest_tag: tag}
+        _ -> student
+      end
+    else
+      student
     end
   end
 
@@ -201,53 +238,8 @@ defmodule ThesisMonitor.Commands.Status do
   end
 
   defp display_table(students, opts, output) do
-    # Name列をStudent IDとRepositoryの間に配置
-    base_headers = ["Student ID", "Name", "Repository"]
-    type_headers = if opts[:long], do: ["Type"], else: []
-    # デフォルトで表示
-    branch_headers = ["Latest Branch"]
-    status_headers = if opts[:show_status], do: ["Status"], else: []
-    protection_headers = if opts[:show_protection], do: ["Protection"], else: []
-    pending_headers = if opts[:pending_reviews], do: ["Pending"], else: []
-    update_headers = ["Last Update"]
-
-    headers =
-      base_headers ++
-        type_headers ++
-        branch_headers ++
-        status_headers ++ protection_headers ++ pending_headers ++ update_headers
-
-    rows =
-      students
-      |> Enum.map(fn student ->
-        # Name列をStudent IDとRepositoryの間に配置
-        base_row = [
-          student.id,
-          Student.format_name(student, opts),
-          student.repo_name
-        ]
-
-        type_row =
-          if opts[:long], do: [format_type(student.type)], else: []
-
-        # デフォルトで表示
-        branch_row = [format_latest_branch(student)]
-
-        status_row =
-          if opts[:show_status], do: [Student.repo_status(student)], else: []
-
-        protection_row =
-          if opts[:show_protection], do: [Student.protection_icon(student)], else: []
-
-        pending_row =
-          if opts[:pending_reviews], do: [format_pending(student.pending_review)], else: []
-
-        update_row = [Student.format_last_update(student)]
-
-        base_row ++
-          type_row ++
-          branch_row ++ status_row ++ protection_row ++ pending_row ++ update_row
-      end)
+    headers = table_headers(opts)
+    rows = Enum.map(students, &table_row(&1, opts))
 
     call_output(output, :print_table, [
       headers,
@@ -256,6 +248,34 @@ defmodule ThesisMonitor.Commands.Status do
       [format: :compact]
     ])
   end
+
+  # Name 列を Student ID と Repository の間に配置。オプション列は該当時のみ差し込む。
+  defp table_headers(opts) do
+    ["Student ID", "Name", "Repository"] ++
+      optional(opts[:long], "Type") ++
+      ["Latest Branch"] ++
+      optional(opts[:show_status], "Status") ++
+      optional(opts[:show_protection], "Protection") ++
+      optional(opts[:pending_reviews], "Pending") ++
+      optional(opts[:latest_tag], "Latest Tag") ++
+      ["Last Update"]
+  end
+
+  # table_headers と同じ順序で各セルを組み立てる。
+  defp table_row(student, opts) do
+    [student.id, Student.format_name(student, opts), student.repo_name] ++
+      optional(opts[:long], format_type(student.type)) ++
+      [format_latest_branch(student)] ++
+      optional(opts[:show_status], Student.repo_status(student)) ++
+      optional(opts[:show_protection], Student.protection_icon(student)) ++
+      optional(opts[:pending_reviews], format_pending(student.pending_review)) ++
+      optional(opts[:latest_tag], format_latest_tag(student.latest_tag)) ++
+      [Student.format_last_update(student)]
+  end
+
+  # オプション列のセル/ヘッダを 1 要素リスト or 空リストで返す。
+  defp optional(flag, _value) when flag in [nil, false], do: []
+  defp optional(_flag, value), do: [value]
 
   defp display_json(students, opts, output) do
     data =
@@ -283,8 +303,15 @@ defmodule ThesisMonitor.Commands.Status do
             base_data
           end
 
-        if opts[:pending_reviews] do
-          Map.put(base_data, :pending_review, student.pending_review)
+        base_data =
+          if opts[:pending_reviews] do
+            Map.put(base_data, :pending_review, student.pending_review)
+          else
+            base_data
+          end
+
+        if opts[:latest_tag] do
+          Map.put(base_data, :latest_tag, format_latest_tag(student.latest_tag))
         else
           base_data
         end
@@ -308,6 +335,7 @@ defmodule ThesisMonitor.Commands.Status do
       csv_optional(",status", opts[:show_status]) <>
       csv_optional(",protection", opts[:show_protection]) <>
       csv_optional(",pending_review", opts[:pending_reviews]) <>
+      csv_optional(",latest_tag", opts[:latest_tag]) <>
       ",last_update"
   end
 
@@ -317,6 +345,7 @@ defmodule ThesisMonitor.Commands.Status do
       csv_optional(",#{Student.repo_status(student)}", opts[:show_status]) <>
       csv_optional(",#{student.protection_status}", opts[:show_protection]) <>
       csv_optional(",#{format_pending(student.pending_review)}", opts[:pending_reviews]) <>
+      csv_optional(",#{format_latest_tag(student.latest_tag)}", opts[:latest_tag]) <>
       ",#{Student.format_last_update(student)}"
   end
 
@@ -370,6 +399,13 @@ defmodule ThesisMonitor.Commands.Status do
   defp format_pending(nil), do: "N/A"
   defp format_pending(true), do: "yes"
   defp format_pending(false), do: "-"
+
+  # 最新タグ（正式リリース）の表示（Issue #67）。
+  # nil=対象外/未取得→N/A、:none=対象だがリリース無し→-、%{name, date}→"name (date)"。
+  defp format_latest_tag(nil), do: "N/A"
+  defp format_latest_tag(:none), do: "-"
+  defp format_latest_tag(%{name: name, date: nil}), do: name
+  defp format_latest_tag(%{name: name, date: date}), do: "#{name} (#{date})"
 
   # ソート処理
   defp sort_students(students, opts) do

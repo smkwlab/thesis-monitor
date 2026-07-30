@@ -477,6 +477,28 @@ defmodule ThesisMonitor.DataSource.GitHubAPITest do
     end
   end
 
+  describe "parse_latest_release/1 (issue #67)" do
+    test "maps a release body to name + date (YYYY-MM-DD)" do
+      body = %{"tag_name" => "final-2nd", "published_at" => "2026-01-15T09:00:00Z"}
+
+      assert GitHubAPI.parse_latest_release({:ok, body}) ==
+               %{name: "final-2nd", date: "2026-01-15"}
+    end
+
+    test "returns :none when there is no formal release (404)" do
+      assert GitHubAPI.parse_latest_release({:error, :not_found}) == :none
+    end
+
+    test "returns nil for other errors (unknown, shown as N/A)" do
+      assert GitHubAPI.parse_latest_release({:error, :unauthorized}) == nil
+    end
+
+    test "tolerates a missing published_at (date nil)" do
+      assert GitHubAPI.parse_latest_release({:ok, %{"tag_name" => "submit"}}) ==
+               %{name: "submit", date: nil}
+    end
+  end
+
   defp student_commit(date, login, opts \\ []) do
     parents = for i <- 1..Keyword.get(opts, :parents, 1)//1, do: %{"sha" => "parent#{i}"}
 

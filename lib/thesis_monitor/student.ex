@@ -32,6 +32,9 @@ defmodule ThesisMonitor.Student do
     :updated_at,
     # 教員の返信待ちか（Issue #31 / #46、--pending-reviews 時のみ設定）
     :pending_review,
+    # 最新の正式リリース（Issue #67、--latest-tag 時のみ設定）。
+    # nil=対象外/未取得、:none=対象だがリリース無し、%{name, date}=リリースあり
+    :latest_tag,
     # archive 実行日時（registry の archived_at。存在すれば運用終了）
     :archived_at
   ]
@@ -51,6 +54,7 @@ defmodule ThesisMonitor.Student do
           latest_branch: String.t() | nil,
           updated_at: String.t() | nil,
           pending_review: boolean() | nil,
+          latest_tag: %{name: String.t(), date: String.t() | nil} | :none | nil,
           archived_at: String.t() | nil
         }
 

@@ -348,6 +348,35 @@ defmodule ThesisMonitor.DataSource.GitHubAPI do
     {:ok, repo_pending_review?(pairs)}
   end
 
+  @doc """
+  最新の正式リリース（non-prerelease）を取得する（Issue #67）。
+
+  `GET /repos/{org}/{repo}/releases/latest` は draft/prerelease を除外した最新
+  リリースを1呼び出しで返す。学生 repo では `submit` / `final-*` のマイルストーン
+  タグ push がこの正式リリースになり、PR/ブランチビルドの `<ref>-release` prerelease は
+  自動的に除外される。返り値は `{:ok, value}`:
+    - `%{name, date}`  正式リリースあり（date は published_at の YYYY-MM-DD）
+    - `:none`          正式リリース無し（404）
+    - `nil`            その他のエラー（不明。表示上は N/A）
+  """
+  def get_latest_tag(%Student{repo_name: repo_name}) do
+    path = "/repos/#{org()}/#{repo_name}/releases/latest"
+    {:ok, parse_latest_release(Client.get(path, client_opts()))}
+  end
+
+  @doc false
+  # releases/latest のレスポンスを表示用の値へ整形する（純粋関数・テスト対象）。
+  def parse_latest_release({:ok, %{"tag_name" => name} = body}) do
+    %{name: name, date: release_date(body["published_at"])}
+  end
+
+  def parse_latest_release({:error, :not_found}), do: :none
+  def parse_latest_release(_), do: nil
+
+  # published_at（ISO8601）から日付部分 YYYY-MM-DD を取り出す。欠損は nil。
+  defp release_date(date) when is_binary(date), do: String.slice(date, 0, 10)
+  defp release_date(_), do: nil
+
   # PR の {学生の最新コミット時刻, 教員の最新レビュー時刻} を返す
   defp pr_activity_pair(repo_name, pr, instructors) do
     number = pr["number"]
