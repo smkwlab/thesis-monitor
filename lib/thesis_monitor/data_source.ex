@@ -170,6 +170,32 @@ defmodule ThesisMonitor.DataSource do
   def needs_latest_branch?(_), do: false
 
   @doc """
+  最新の正式リリース（タグ）を取得（Issue #67、--latest-tag 用）
+
+  リポジトリが存在しない場合（exists: false）は取得せず nil を返す。
+  """
+  def get_latest_tag(%Student{exists: false}), do: {:ok, nil}
+
+  def get_latest_tag(%Student{} = student) do
+    GitHubAPI.get_latest_tag(student)
+  end
+
+  @doc """
+  最新の提出マイルストーンタグの追跡が必要かチェック
+
+  提出タグ（`submit` / `final` / `final-*` 等）を打つ文書種別で判定する。
+  thesis(sotsuron/master)・latex・poster に加え、ise も対象（ise は Release を作らず
+  git タグ `final` だけを打つため、タグベースで拾う）。wr は週次ビルドで提出
+  マイルストーンタグを通常持たないため対象外。review_flow とは独立（返信待ちの追跡
+  要否とは判定軸が異なる）。archive 済みは運用終了のため対象外。
+  """
+  def needs_latest_tag?(%Student{repo_type: type} = student)
+      when type in ["sotsuron", "master", "latex", "poster", "ise"],
+      do: not Student.archived?(student)
+
+  def needs_latest_tag?(_), do: false
+
+  @doc """
   archive 済みの学生を除外する。
 
   show_archived が `true` のときだけ除外せず全件返す。`false`・`nil`

@@ -348,6 +348,85 @@ defmodule ThesisMonitor.DataSource.GitHubAPI do
     {:ok, repo_pending_review?(pairs)}
   end
 
+  @doc """
+  最新の提出マイルストーンタグを取得する（Issue #67）。
+
+  git タグ（`GET /repos/{org}/{repo}/tags`）を対象にする。ise は HTML 運用で Release を
+  作らず `final` タグだけを打つため、Release ではなくタグを見る。ビルド生成物（`<ref>-release`）
+  と bot タグ（`renovate/*` / `dependabot/*`）はノイズとして除外し、残ったマイルストーン
+  タグ（`submit` / `final` / `final-*` / `abstract-submit` 等）から commit 日付が最新の
+  ものを選ぶ。タグ API は日付を返さないため、除外後の少数タグについて commit を追加取得する。
+  返り値は `{:ok, value}`:
+    - `%{name, date}`  マイルストーンタグあり（date は committer.date の YYYY-MM-DD）
+    - `:none`          タグ無し / マイルストーンタグ無し
+    - `nil`            API エラー（不明。表示上は N/A）
+  """
+  def get_latest_tag(%Student{repo_name: repo_name}) do
+    case list_tags(repo_name) do
+      {:ok, tags} ->
+        # 除外後のマイルストーンタグは通常少数（ise は 1、thesis でも submit/final/final-*/
+        # abstract-submit 程度）のため、各タグの commit 日付取得は直列でよい。repo 間の
+        # 並列は fetch_latest_tags_for_students 側（max_concurrency: 10）が担う。
+        dated =
+          tags
+          |> Enum.filter(&milestone_tag?(&1["name"]))
+          |> Enum.map(
+            &%{name: &1["name"], date: tag_commit_date(repo_name, get_in(&1, ["commit", "sha"]))}
+          )
+
+        {:ok, select_latest_tag(dated)}
+
+      # 取得失敗（存在しない repo / 権限 / ネットワーク等）は「不明」= N/A（nil）。
+      # 「タグ 0 件」は {:ok, []} → select_latest_tag([]) が :none（= -）を返すため、
+      # ここで 404 を :none に丸めない（存在しない repo を「未提出」に見せない）。
+      _ ->
+        {:ok, nil}
+    end
+  end
+
+  @doc false
+  # 学生の提出マイルストーンタグか。ビルド生成物（`*-release`）と bot の名前空間タグ
+  # （`renovate/…` / `dependabot/…`、`/` を含む）を除外する（純粋関数・テスト対象）。
+  def milestone_tag?(name) when is_binary(name) do
+    not String.contains?(name, "/") and not String.ends_with?(name, "-release")
+  end
+
+  def milestone_tag?(_), do: false
+
+  @doc false
+  # `%{name, date}` のリストから commit 日付が最大のものを選ぶ。空なら :none。
+  # date は tag_commit_date が返す "YYYY-MM-DD"（固定長）前提で、辞書順 = 時系列順のため
+  # 文字列比較で足りる。date=nil は最古扱い（"" が辞書順最小）。純粋関数・テスト対象。
+  def select_latest_tag([]), do: :none
+  def select_latest_tag(tags), do: Enum.max_by(tags, fn %{date: date} -> date || "" end)
+
+  # /tags は newest 保証が無いので全件取得してこちらで日付比較する。per_page=100（上限）まで。
+  # 1 repo に 100 タグ超は非現実的なためページネーションは追わない（get_pr_commits と同方針）。
+  # ただし *-release ビルドタグが 100 件を超えるとマイルストーンが押し出されうる点は許容する。
+  defp list_tags(repo_name) do
+    path = "/repos/#{org()}/#{repo_name}/tags"
+
+    case Client.get(path, [params: [per_page: 100]] ++ client_opts()) do
+      {:ok, list} when is_list(list) -> {:ok, list}
+      other -> other
+    end
+  end
+
+  # タグが指す commit の committer.date（YYYY-MM-DD）。取得不可なら nil。
+  defp tag_commit_date(repo_name, sha) when is_binary(sha) do
+    path = "/repos/#{org()}/#{repo_name}/commits/#{sha}"
+
+    case Client.get(path, client_opts()) do
+      {:ok, %{"commit" => %{"committer" => %{"date" => date}}}} when is_binary(date) ->
+        String.slice(date, 0, 10)
+
+      _ ->
+        nil
+    end
+  end
+
+  defp tag_commit_date(_repo_name, _sha), do: nil
+
   # PR の {学生の最新コミット時刻, 教員の最新レビュー時刻} を返す
   defp pr_activity_pair(repo_name, pr, instructors) do
     number = pr["number"]

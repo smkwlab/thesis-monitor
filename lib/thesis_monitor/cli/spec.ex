@@ -68,6 +68,12 @@ defmodule ThesisMonitor.CLI.Spec do
       values: nil,
       doc: "教員の返信待ちリポジトリを表示（API 追加取得のためオプトイン）"
     },
+    latest_tag: %{
+      type: :boolean,
+      alias: nil,
+      values: nil,
+      doc: "最新の正式リリース（タグ）を表示（thesis/latex/poster 対象、API 追加取得のためオプトイン）"
+    },
     fullname: %{type: :boolean, alias: nil, values: nil, doc: "名前の長い場合も切り詰めずに全文表示"},
     no_cache: %{
       type: :boolean,
@@ -136,6 +142,7 @@ defmodule ThesisMonitor.CLI.Spec do
         :show_protection,
         :show_status,
         :pending_reviews,
+        :latest_tag,
         :fullname,
         :no_cache,
         :show_archived,
@@ -148,6 +155,7 @@ defmodule ThesisMonitor.CLI.Spec do
         "list --show-protection",
         "list --type thesis",
         "list --type ise --pending-reviews",
+        "list --type thesis --latest-tag",
         "list -a",
         "list -t -r",
         "list --format json"

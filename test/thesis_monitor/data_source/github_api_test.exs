@@ -477,6 +477,51 @@ defmodule ThesisMonitor.DataSource.GitHubAPITest do
     end
   end
 
+  describe "milestone_tag?/1 (issue #67)" do
+    test "keeps student milestone tags (submit / final / final-N / abstract-submit)" do
+      for name <- ["submit", "final", "final-2", "abstract-submit"] do
+        assert GitHubAPI.milestone_tag?(name), "expected #{name} to be a milestone tag"
+      end
+    end
+
+    test "drops build-artifact tags (<ref>-release)" do
+      for name <- ["2nd-draft-release", "0th-draft-release", "add-ml-workflow-release"] do
+        refute GitHubAPI.milestone_tag?(name), "expected #{name} to be dropped"
+      end
+    end
+
+    test "drops namespaced bot tags (renovate/* , dependabot/*)" do
+      for name <- ["renovate/configure-release", "dependabot/github_actions/foo-1.0-release"] do
+        refute GitHubAPI.milestone_tag?(name), "expected #{name} to be dropped"
+      end
+    end
+
+    test "returns false for non-binary input" do
+      refute GitHubAPI.milestone_tag?(nil)
+    end
+  end
+
+  describe "select_latest_tag/1 (issue #67)" do
+    test "returns :none for an empty list" do
+      assert GitHubAPI.select_latest_tag([]) == :none
+    end
+
+    test "picks the tag with the newest commit date" do
+      tags = [
+        %{name: "submit", date: "2026-01-08"},
+        %{name: "final-2", date: "2026-02-01"},
+        %{name: "final", date: "2026-01-20"}
+      ]
+
+      assert GitHubAPI.select_latest_tag(tags) == %{name: "final-2", date: "2026-02-01"}
+    end
+
+    test "treats a nil date as the oldest" do
+      tags = [%{name: "final", date: "2026-01-20"}, %{name: "wip", date: nil}]
+      assert GitHubAPI.select_latest_tag(tags) == %{name: "final", date: "2026-01-20"}
+    end
+  end
+
   defp student_commit(date, login, opts \\ []) do
     parents = for i <- 1..Keyword.get(opts, :parents, 1)//1, do: %{"sha" => "parent#{i}"}
 
